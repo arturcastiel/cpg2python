@@ -29,3 +29,12 @@ All notable changes to this project will be documented in this file.
   Linear pillar interpolation; quantised int64 dedup via `np.unique`
   (no kd-tree, no hash table) with `_QUANT = 1e9` matching `_toy._QUANT`.
   `from_grdecl` and `CornerCube` re-exported at the top level (PR-5).
+- `cpg2unstructured.unstructured.find_i_faces` and `find_j_faces` cover
+  inner + boundary face topology along the i and j directions for
+  matching-Z grids. Output is a `Faces` record with sorted node-quads,
+  neighbour pairs (`-1` in column 1 for boundary faces), and an int8
+  `direction` field (0 = i, 1 = j, 2 = k for PR-7). Faulted decks raise
+  `NonMatchingZError`. Inactive cells (ACTNUM=0) cleanly degrade
+  shared faces to boundary faces of the active side without leaking
+  the `-1` sentinel into face quads. Top-level re-exports for `Faces`,
+  `find_i_faces`, `find_j_faces`, and `find_ij_faces` (PR-6).
