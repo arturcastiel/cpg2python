@@ -51,11 +51,21 @@ All notable changes to this project will be documented in this file.
 - `cpg2unstructured.geometry` module: `face_geometry(nodes, faces,
   cell_corners) -> FaceGeometry` and `cell_geometry(nodes, faces,
   cell_faces, fg) -> CellGeometry`. Face centroid = arithmetic mean of
-  the 4 corner nodes; face area = sum of two triangle areas via
-  cross-product; face normal = unit vector consistent with
-  `faces.neighbours[:, 0] → faces.neighbours[:, 1]` (outward from cell 0
-  for boundary faces). Cell volume + centroid via the divergence
-  theorem (`V = (1/3) Σ c·n·A`, exact to 1e-12 on unit cubes).
-  Degenerate faces (norm_len < 1e-15) return zero normal + zero area
-  without raising. Top-level re-exports for `FaceGeometry`,
+  the 4 corner nodes; face area + normal via the diagonal-cross-product
+  formula (`(1/2) |d1 × d2|`, where d1, d2 are the 2 longest pairwise
+  inter-vertex distances — order-independent on PR-6's sort-by-id quads);
+  normal oriented per `faces.neighbours[:, 0] → faces.neighbours[:, 1]`
+  (outward from cell 0 for boundary faces). Cell volume + centroid via
+  the divergence theorem (`V = (1/3) Σ c·n·A`, exact to 1e-12 on unit
+  cubes). Degenerate faces (norm_len < 1e-15) return zero normal + zero
+  area without raising. Top-level re-exports for `FaceGeometry`,
   `CellGeometry`, `face_geometry`, `cell_geometry` (PR-8).
+- `cpg2unstructured.index_map.IndexMap` — bi-directional active-cell id
+  ↔ Eclipse `(i, j, k)` map. Constructed from `(cart_dims,
+  original_ijk)` (e.g. `mesh.original_ijk` from `build_topology`).
+  Forward lookup is an array index. Reverse lookup builds a dense
+  `(NX, NY, NZ)` int64 array lazily on first access and caches it.
+  Inactive cells return `None` from `active_id(i, j, k)`; out-of-range
+  raises `IndexError`. Helpers: `cell_ijk`, `linear_to_cell`,
+  `cells_in_layer`, `n_active`, `cart_dims`. `__slots__` keeps the
+  per-instance footprint small. Top-level re-export for `IndexMap` (PR-9).
