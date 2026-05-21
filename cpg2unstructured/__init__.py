@@ -18,6 +18,7 @@ from cpg2unstructured.geometry import (
     face_geometry,
 )
 from cpg2unstructured.grdecl_reader import Grdecl, read_grdecl
+from cpg2unstructured.index_map import IndexMap
 from cpg2unstructured.unstructured import (
     Faces,
     build_topology,
@@ -45,6 +46,7 @@ __all__ = [
     "CellGeometry",
     "face_geometry",
     "cell_geometry",
+    "IndexMap",
     "Cpg2UError",
     "GrdeclError",
     "GrdeclSyntaxError",
