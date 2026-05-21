@@ -1,0 +1,29 @@
+-- Toy 3x3x2 cartesian deck for cpg2unstructured PR-3 tests
+-- 16 pillars, 144 ZCORN floats, 18 ACTNUM cells
+SPECGRID
+  3 3 2 1 F /
+
+COORD
+  0 0 0  0 0 2
+  1 0 0  1 0 2
+  2 0 0  2 0 2
+  3 0 0  3 0 2
+  0 1 0  0 1 2
+  1 1 0  1 1 2
+  2 1 0  2 1 2
+  3 1 0  3 1 2
+  0 2 0  0 2 2
+  1 2 0  1 2 2
+  2 2 0  2 2 2
+  3 2 0  3 2 2
+  0 3 0  0 3 2
+  1 3 0  1 3 2
+  2 3 0  2 3 2
+  3 3 0  3 3 2  /
+
+ZCORN
+  36*0   36*1
+  36*1   36*2 /
+
+ACTNUM
+  18*1 /
