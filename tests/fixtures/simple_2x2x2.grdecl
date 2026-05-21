@@ -1,0 +1,21 @@
+-- Toy 2x2x2 cartesian deck for cpg2unstructured PR-3 tests
+SPECGRID
+  2 2 2 1 F /
+
+COORD
+  0 0 0  0 0 2
+  1 0 0  1 0 2
+  2 0 0  2 0 2
+  0 1 0  0 1 2
+  1 1 0  1 1 2
+  2 1 0  2 1 2
+  0 2 0  0 2 2
+  1 2 0  1 2 2
+  2 2 0  2 2 2  /
+
+ZCORN
+  16*0   16*1
+  16*1   16*2 /
+
+ACTNUM
+  8*1 /
