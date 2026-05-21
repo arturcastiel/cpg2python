@@ -1,0 +1,13 @@
+-- Top-level deck composed via INCLUDE for the PR-4 test pipeline.
+
+SPECGRID
+  2 2 2 1 F /
+
+INCLUDE
+  'geom.inc' /
+
+INCLUDE
+  'props.inc' /
+
+ACTNUM
+  8*1 /

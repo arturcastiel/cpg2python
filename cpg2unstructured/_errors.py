@@ -6,6 +6,8 @@ __all__ = [
     "GrdeclError",
     "GrdeclSyntaxError",
     "GrdeclConsistencyError",
+    "GrdeclIncludeError",
+    "GrdeclDuplicatePropertyWarning",
     "NonMatchingZError",
 ]
 
@@ -24,6 +26,14 @@ class GrdeclSyntaxError(GrdeclError):
 
 class GrdeclConsistencyError(GrdeclError):
     """Logically inconsistent file (DIMENS != SPECGRID; ZCORN length wrong; ...)."""
+
+
+class GrdeclIncludeError(GrdeclError):
+    """INCLUDE-graph problem (cycle, missing file, bad filename)."""
+
+
+class GrdeclDuplicatePropertyWarning(UserWarning):
+    """Same property keyword declared more than once; last-write-wins."""
 
 
 class NonMatchingZError(Cpg2UError):

@@ -4,7 +4,9 @@ from __future__ import annotations
 from cpg2unstructured._errors import (
     Cpg2UError,
     GrdeclConsistencyError,
+    GrdeclDuplicatePropertyWarning,
     GrdeclError,
+    GrdeclIncludeError,
     GrdeclSyntaxError,
     NonMatchingZError,
 )
@@ -20,5 +22,7 @@ __all__ = [
     "GrdeclError",
     "GrdeclSyntaxError",
     "GrdeclConsistencyError",
+    "GrdeclIncludeError",
+    "GrdeclDuplicatePropertyWarning",
     "NonMatchingZError",
 ]

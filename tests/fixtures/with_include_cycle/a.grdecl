@@ -1,0 +1,5 @@
+-- Cycle fixture (a → b → a). Parser must raise GrdeclIncludeError
+-- before any consistency check runs.
+
+INCLUDE
+  'b.inc' /
