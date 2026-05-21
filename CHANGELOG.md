@@ -38,3 +38,12 @@ All notable changes to this project will be documented in this file.
   shared faces to boundary faces of the active side without leaking
   the `-1` sentinel into face quads. Top-level re-exports for `Faces`,
   `find_i_faces`, `find_j_faces`, and `find_ij_faces` (PR-6).
+- `find_k_faces` for the k direction (symmetric to i/j) and
+  `build_topology(cube)` which assembles i+j+k faces, inverts to a
+  `cell_faces` table of shape `(Ncells, 6)` with slot ordering
+  `[i-, i+, j-, j+, k-, k+]`, drops inactive + zero-volume cells, and
+  rebuilds contiguous cell ids. Returns the topology-only `_TopoMesh`
+  (geometry lands in PR-8) carrying `nodes`, `faces`, `cell_faces`,
+  `cell_corners`, and Eclipse-natural `original_ijk`. Zero-volume
+  detection uses an O(N) vectorised "8 unique node ids" check. Top-level
+  re-exports for `find_k_faces` and `build_topology` (PR-7).
