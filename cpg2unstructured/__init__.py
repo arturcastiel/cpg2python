@@ -10,6 +10,7 @@ from cpg2unstructured._errors import (
     GrdeclSyntaxError,
     NonMatchingZError,
 )
+from cpg2unstructured.cpg import CornerCube, from_grdecl
 from cpg2unstructured.grdecl_reader import Grdecl, read_grdecl
 
 __version__ = "0.1.0.dev0"
@@ -18,6 +19,8 @@ __all__ = [
     "__version__",
     "Grdecl",
     "read_grdecl",
+    "CornerCube",
+    "from_grdecl",
     "Cpg2UError",
     "GrdeclError",
     "GrdeclSyntaxError",

@@ -21,3 +21,11 @@ All notable changes to this project will be documented in this file.
   region IDs > 127). Duplicate property keywords warn via
   `GrdeclDuplicatePropertyWarning` with last-write-wins semantics
   (PR-4).
+- Corner-cube assembly + node deduplication via
+  `cpg2unstructured.cpg.from_grdecl(g) -> CornerCube`. Returns
+  `nodes: (Nnodes, 3) float64`, `P: (2*NX, 2*NY, 2*NZ) int64`
+  (the back-map from corner-cube slot to unique node, with `-1` for
+  slots owned by inactive cells), and `actnum_3d: (NX, NY, NZ) bool`.
+  Linear pillar interpolation; quantised int64 dedup via `np.unique`
+  (no kd-tree, no hash table) with `_QUANT = 1e9` matching `_toy._QUANT`.
+  `from_grdecl` and `CornerCube` re-exported at the top level (PR-5).
