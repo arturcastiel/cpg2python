@@ -1,0 +1,41 @@
+-- 2x2x2 cartesian deck with a deliberate zero-volume cell.
+-- Used by PR-7's test_pinchout_drops_zero_volume_cell.
+--
+-- The top z-layer (k_slot=3) is pulled down to z=1 wherever cell (1,1,1)
+-- (or any cell sharing its top pillars) has a corner. Matching-Z
+-- demands the change extend to ALL slots touching pillars (1,1),
+-- (2,1), (1,2), (2,2) at k_slot=3 — concretely positions where
+-- i_slot ∈ {1,2,3} AND j_slot ∈ {1,2,3}.
+--
+-- Effect on cells:
+--   cell (1,1,1)      4 top + 4 bot corners all at z=1, at 4 pillars
+--                      → 4 of 6 faces have only 2 unique nodes
+--                      → dropped as zero-volume.
+--   cells (0,0,1), (0,1,1), (1,0,1)   ONE top corner pulled to z=1
+--                      → each is a "wedge" with 7 unique corners,
+--                        but no face has < 3 unique nodes
+--                      → kept (still valid 3D topology).
+-- Net: 7 active+real cells after build_topology.
+
+SPECGRID
+  2 2 2 1 F /
+
+COORD
+  0 0 0  0 0 2
+  1 0 0  1 0 2
+  2 0 0  2 0 2
+  0 1 0  0 1 2
+  1 1 0  1 1 2
+  2 1 0  2 1 2
+  0 2 0  0 2 2
+  1 2 0  1 2 2
+  2 2 0  2 2 2  /
+
+ZCORN
+  16*0
+  16*1
+  16*1
+  2 2 2 2   2 1 1 1   2 1 1 1   2 1 1 1 /
+
+ACTNUM
+  8*1 /

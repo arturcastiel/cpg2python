@@ -1,0 +1,35 @@
+-- 3x3x3 unit-spacing cartesian deck.
+-- Used by PR-7's test_3x3x3_strictly_interior_cell_six_neighbours.
+-- Cell (i=1, j=1, k=1) is the strictly-interior cell; F-order index 13.
+
+SPECGRID
+  3 3 3 1 F /
+
+COORD
+  0 0 0  0 0 3
+  1 0 0  1 0 3
+  2 0 0  2 0 3
+  3 0 0  3 0 3
+  0 1 0  0 1 3
+  1 1 0  1 1 3
+  2 1 0  2 1 3
+  3 1 0  3 1 3
+  0 2 0  0 2 3
+  1 2 0  1 2 3
+  2 2 0  2 2 3
+  3 2 0  3 2 3
+  0 3 0  0 3 3
+  1 3 0  1 3 3
+  2 3 0  2 3 3
+  3 3 0  3 3 3  /
+
+ZCORN
+  36*0
+  36*1
+  36*1
+  36*2
+  36*2
+  36*3 /
+
+ACTNUM
+  27*1 /
