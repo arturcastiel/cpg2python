@@ -69,3 +69,15 @@ All notable changes to this project will be documented in this file.
   raises `IndexError`. Helpers: `cell_ijk`, `linear_to_cell`,
   `cells_in_layer`, `n_active`, `cart_dims`. `__slots__` keeps the
   per-instance footprint small. Top-level re-export for `IndexMap` (PR-9).
+- `cpg2unstructured.graph` module — pure-numpy cell-cell adjacency
+  and Dijkstra shortest-path. `cell_adjacency(mesh, weights=...)`
+  returns a `list[list[(neighbour_id, weight)]]` with three weight
+  modes: `"unit"`, `"distance"` (requires `cell_centroids` from
+  `cell_geometry`), `"none"`. Adjacency is symmetric; only inner
+  faces produce edges. `shortest_path(adj, src, dst)` runs Dijkstra
+  via heapq + numpy and returns `(total_weight, path)` where path
+  includes both endpoints. Unknown weight modes raise `ValueError`
+  (defence against typos). Unreachable destinations raise
+  `ValueError("no path …")`. Scipy-free; PR-11 will add a
+  scipy-CSR fast path under the `[fast]` extra. Top-level re-exports
+  for `cell_adjacency` and `shortest_path` (PR-10).
