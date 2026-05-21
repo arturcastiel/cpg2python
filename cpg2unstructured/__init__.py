@@ -11,6 +11,12 @@ from cpg2unstructured._errors import (
     NonMatchingZError,
 )
 from cpg2unstructured.cpg import CornerCube, from_grdecl
+from cpg2unstructured.geometry import (
+    CellGeometry,
+    FaceGeometry,
+    cell_geometry,
+    face_geometry,
+)
 from cpg2unstructured.grdecl_reader import Grdecl, read_grdecl
 from cpg2unstructured.unstructured import (
     Faces,
@@ -35,6 +41,10 @@ __all__ = [
     "find_k_faces",
     "find_ij_faces",
     "build_topology",
+    "FaceGeometry",
+    "CellGeometry",
+    "face_geometry",
+    "cell_geometry",
     "Cpg2UError",
     "GrdeclError",
     "GrdeclSyntaxError",

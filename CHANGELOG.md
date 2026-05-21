@@ -45,5 +45,17 @@ All notable changes to this project will be documented in this file.
   rebuilds contiguous cell ids. Returns the topology-only `_TopoMesh`
   (geometry lands in PR-8) carrying `nodes`, `faces`, `cell_faces`,
   `cell_corners`, and Eclipse-natural `original_ijk`. Zero-volume
-  detection uses an O(N) vectorised "8 unique node ids" check. Top-level
-  re-exports for `find_k_faces` and `build_topology` (PR-7).
+  detection is per-face: a cell is dropped iff at least one of its
+  6 faces has < 3 unique node ids. Top-level re-exports for
+  `find_k_faces` and `build_topology` (PR-7).
+- `cpg2unstructured.geometry` module: `face_geometry(nodes, faces,
+  cell_corners) -> FaceGeometry` and `cell_geometry(nodes, faces,
+  cell_faces, fg) -> CellGeometry`. Face centroid = arithmetic mean of
+  the 4 corner nodes; face area = sum of two triangle areas via
+  cross-product; face normal = unit vector consistent with
+  `faces.neighbours[:, 0] → faces.neighbours[:, 1]` (outward from cell 0
+  for boundary faces). Cell volume + centroid via the divergence
+  theorem (`V = (1/3) Σ c·n·A`, exact to 1e-12 on unit cubes).
+  Degenerate faces (norm_len < 1e-15) return zero normal + zero area
+  without raising. Top-level re-exports for `FaceGeometry`,
+  `CellGeometry`, `face_geometry`, `cell_geometry` (PR-8).
