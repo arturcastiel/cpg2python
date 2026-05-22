@@ -8,6 +8,7 @@ inline lands in PR-6/PR-7/PR-8).
 """
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
 from cpg2unstructured import build_topology, from_grdecl, read_grdecl
@@ -88,11 +89,24 @@ def test_simple_faulted_2x2x2_no_k_fault(fixtures):
 # ── behaviour-preserving: find_*_faces still raise on faulted deck ─
 
 
-def test_find_i_faces_still_raises_on_faulted_fixture(fixtures):
+def test_find_i_faces_dispatches_on_faulted_fixture(fixtures):
+    """After PR-6 (phase 2-faults), find_i_faces dispatches matching
+    vs faulted inline and SUCCEEDS on simple_faulted_2x2x2 (was raising
+    before PR-6). The output Faces record contains matching-Z faces
+    from non-faulted stacks + fault-faces from faulted stacks."""
     g = read_grdecl(fixtures / "simple_faulted_2x2x2.grdecl")
     cube = from_grdecl(g)
-    with pytest.raises(NonMatchingZError, match="i=1"):
-        find_i_faces(cube)
+    faces = find_i_faces(cube)
+    # simple_faulted_2x2x2 is 2x2x2 with both j-stacks faulted (single
+    # i-pair, both j-rows). All inner i-faces in faulted stacks become
+    # fault-faces; boundary i-faces stay as matching-Z.
+    # · matching: 2 boundary i-planes × 2 j × 2 k = 8 boundary faces
+    # · fault:    2 j-stacks × 3 connections = 6 fault faces
+    # Total: 14 i-faces.
+    assert faces.nodes.shape == (14, 4)
+    assert faces.neighbours.shape == (14, 2)
+    np.testing.assert_array_equal(faces.direction,
+                                  np.zeros(14, dtype=np.int8))
 
 
 def test_find_j_faces_no_raise_on_faulted_fixture(fixtures):
