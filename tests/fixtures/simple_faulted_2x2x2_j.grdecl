@@ -1,0 +1,43 @@
+-- simple_faulted_2x2x2_j.grdecl
+-- 2x2x2 cartesian deck with a HALF-CELL Z FAULT between j=0 and j=1.
+-- Mirror of simple_faulted_2x2x2.grdecl along the j axis (j-fault
+-- instead of i-fault).
+--
+-- Cells at j=0 row: top z = 0, bot 1 (k=0); top 1, bot 2 (k=1).
+-- Cells at j=1 row: top z = 0.5, bot 1.5; top 1.5, bot 2.5.
+--
+-- Expected mask behaviour:
+--   _faulted_pillar_mask_i → (1, 2, 2) all-False
+--   _faulted_pillar_mask_j → (2, 1, 2) all-True
+--   _faulted_pillar_mask_k → (2, 2, 1) all-False
+
+SPECGRID
+  2 2 2 1 F /
+
+COORD
+  0 0 0  0 0 3
+  1 0 0  1 0 3
+  2 0 0  2 0 3
+  0 1 0  0 1 3
+  1 1 0  1 1 3
+  2 1 0  2 1 3
+  0 2 0  0 2 3
+  1 2 0  1 2 3
+  2 2 0  2 2 3  /
+
+-- ZCORN: 4 slices × 16 values, F-order (i fastest, then j, then k).
+-- Per (j-slot) at each slice: j-slot 0,1 → j=0 row z (no offset),
+-- j-slot 2,3 → j=1 row z (offset +0.5).
+
+ZCORN
+  -- slice 0 (top of k=0): j=0 row z=0, j=1 row z=0.5
+  0   0   0   0      0   0   0   0      0.5 0.5 0.5 0.5    0.5 0.5 0.5 0.5
+  -- slice 1 (bot of k=0)
+  1   1   1   1      1   1   1   1      1.5 1.5 1.5 1.5    1.5 1.5 1.5 1.5
+  -- slice 2 (top of k=1) — matches slice 1 along k → no k-fault
+  1   1   1   1      1   1   1   1      1.5 1.5 1.5 1.5    1.5 1.5 1.5 1.5
+  -- slice 3 (bot of k=1)
+  2   2   2   2      2   2   2   2      2.5 2.5 2.5 2.5    2.5 2.5 2.5 2.5  /
+
+ACTNUM
+  8*1 /
