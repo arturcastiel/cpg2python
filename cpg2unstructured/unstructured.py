@@ -371,16 +371,17 @@ def _empty_faces(direction: int = 0) -> Faces:
 
 
 def find_i_faces(cube: CornerCube) -> Faces:
-    """All i-direction faces (inner + boundary) as a `Faces` record."""
+    """All i-direction faces (inner + boundary) as a ``Faces`` record.
+
+    Dispatches matching-Z stacks to the v0.1.0 fast path and faulted
+    stacks to :func:`_find_faulted_i_faces` (phase 2-faults D-2F-1).
+    When no faulted stacks are present, the output is byte-identical
+    to v0.1.0 — Tier A invariance.
+    """
     nx, ny, nz = cube.cart_dims
     P = cube.P
     actnum_3d = cube.actnum_3d
     faulted = _faulted_pillar_mask_i(P, actnum_3d)
-    if faulted.any():
-        i, j, k = map(int, np.argwhere(faulted)[0])
-        raise NonMatchingZError(
-            f"non-matching-Z across i={i + 1} at (j={j}, k={k}) — v2 only"
-        )
 
     quads_raw = _i_face_quads(P)
     quads = np.sort(quads_raw, axis=-1)
@@ -391,14 +392,38 @@ def find_i_faces(cube: CornerCube) -> Faces:
     cell_id[1:-1] = flat_id.reshape(nx, ny, nz, order="F")
     left  = cell_id[0:nx + 1]
     right = cell_id[1:nx + 2]
-
     keep = ((left != -1) | (right != -1)).ravel()
-    faces_kept = quads_flat[keep]
-    nb_raw = np.stack([left.ravel(), right.ravel()], axis=1)[keep]
+
+    if not faulted.any():
+        # FAST PATH — byte-identical to v0.1.0 for matching-Z decks.
+        faces_kept = quads_flat[keep]
+        nb_raw = np.stack([left.ravel(), right.ravel()], axis=1)[keep]
+        nb = _move_minus_one_to_col1(nb_raw)
+        direction = np.zeros(faces_kept.shape[0], dtype=np.int8)
+        return Faces(nodes=faces_kept, neighbours=nb, direction=direction)
+
+    # DISPATCH PATH — drop matching faces in faulted (i, j) stacks and
+    # concatenate with _find_faulted_i_faces output.
+    stack_faulted = faulted.any(axis=2)              # (nx-1, ny)
+    face_drop = np.zeros((nx + 1, ny, nz), dtype=bool)
+    if stack_faulted.shape[0] > 0:
+        face_drop[1:nx, :, :] = stack_faulted[:, :, None]
+
+    keep_no_fault = keep & ~face_drop.ravel()
+    faces_kept = quads_flat[keep_no_fault]
+    nb_raw = np.stack(
+        [left.ravel(), right.ravel()], axis=1,
+    )[keep_no_fault]
     nb = _move_minus_one_to_col1(nb_raw)
     direction = np.zeros(faces_kept.shape[0], dtype=np.int8)
 
-    return Faces(nodes=faces_kept, neighbours=nb, direction=direction)
+    fault_faces, _ = _find_faulted_i_faces(cube)
+
+    return Faces(
+        nodes=np.concatenate([faces_kept, fault_faces.nodes], axis=0),
+        neighbours=np.concatenate([nb, fault_faces.neighbours], axis=0),
+        direction=np.concatenate([direction, fault_faces.direction], axis=0),
+    )
 
 
 # ── j-faces (symmetric, i ↔ j) ──────────────────────────────────────────────
