@@ -3,20 +3,34 @@
 PR-6 covers i-faces + j-faces (regular, matching-Z).
 PR-7 adds k-faces, cell-face inversion, active-cell rebuild,
 and the topology-only orchestrator `build_topology`.
+PR-12 promotes the topology-only `_TopoMesh` to the public
+`UnstructuredGrid` (read-only properties dict + `__getitem__` accessor
++ lazy IndexMap cache) and adds the `attach_props` filter for
+Eclipse cell-properties → active-cell order. `_TopoMesh` survives as
+a backward-compat type alias so existing `cpg2unstructured.graph`
+imports keep working.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+import dataclasses
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from cpg2unstructured._errors import NonMatchingZError
 from cpg2unstructured.cpg import CornerCube
 
+if TYPE_CHECKING:
+    from cpg2unstructured.grdecl_reader import Grdecl
+    from cpg2unstructured.index_map import IndexMap
+
 __all__ = [
     "Faces",
     "find_i_faces", "find_j_faces", "find_k_faces", "find_ij_faces",
     "build_topology",
+    "UnstructuredGrid",
+    "attach_props",
 ]
 
 
@@ -329,13 +343,22 @@ def find_k_faces(cube: CornerCube) -> Faces:
 
 
 @dataclass(frozen=True)
-class _TopoMesh:
-    """Topology-only mesh — geometry lands in PR-8.
+class UnstructuredGrid:
+    """Public unstructured mesh — nodes + faces + cells + properties.
 
-    `nodes` carries the unique XYZ from `CornerCube.nodes`; node ids
-    referenced by `faces.nodes` and `cell_corners` index into this array.
-    `original_ijk[c]` is the Eclipse-natural `(i, j, k)` of the cell that
-    used to be at new id `c`.
+    Constructed by :func:`build_topology` (PR-7). Optionally enriched
+    with cell properties via :func:`attach_props` (PR-12), which
+    returns a NEW grid with the populated ``props`` dict.
+
+    ``nodes`` carries the unique XYZ from ``CornerCube.nodes``; node ids
+    referenced by ``faces.nodes`` and ``cell_corners`` index into this
+    array. ``original_ijk[c]`` is the Eclipse-natural ``(i, j, k)`` of
+    the cell that used to be at new id ``c``.
+
+    ``props`` is keyed by Eclipse keyword names verbatim (uppercase,
+    e.g. ``"PORO"``). Use the ``grid["PORO"]`` accessor instead of
+    ``grid.props["PORO"]`` for the helpful "available keys" error on
+    misses.
     """
     nodes: np.ndarray              # (Nnodes, 3) float64
     faces: Faces                   # merged i+j+k
@@ -343,6 +366,68 @@ class _TopoMesh:
     cell_corners: np.ndarray       # (Ncells_active, 8) int64 — node ids
     original_ijk: np.ndarray       # (Ncells_active, 3) int64
     cart_dims: tuple[int, int, int]
+    props: dict[str, np.ndarray] = field(default_factory=dict)
+    _index_map: "IndexMap | None" = field(default=None, repr=False, compare=False)
+
+    def __getitem__(self, key: str) -> np.ndarray:
+        try:
+            return self.props[key]
+        except KeyError as exc:
+            avail = sorted(self.props)
+            raise KeyError(
+                f"property {key!r} not attached. Available: {avail}"
+            ) from exc
+
+    def __contains__(self, key: object) -> bool:
+        return key in self.props
+
+    @property
+    def n_cells(self) -> int:
+        return int(self.cell_faces.shape[0])
+
+    @property
+    def index_map(self) -> "IndexMap":
+        """Lazy-cached :class:`IndexMap` built from cart_dims + original_ijk.
+
+        Frozen-dataclass cache: stored via ``object.__setattr__`` on
+        first access (D-PR12-1) — same pattern ``functools.cached_property``
+        uses on frozen dataclasses.
+        """
+        from cpg2unstructured.index_map import IndexMap
+        if self._index_map is None:
+            object.__setattr__(
+                self, "_index_map",
+                IndexMap(self.cart_dims, self.original_ijk),
+            )
+        return self._index_map  # type: ignore[return-value]
+
+
+# Backward-compat type alias: existing code (e.g. cpg2unstructured.graph)
+# imports `_TopoMesh` for type hints. The class was renamed in PR-12
+# without changing field shape — the alias keeps those imports working.
+_TopoMesh = UnstructuredGrid
+
+
+def attach_props(grid: UnstructuredGrid, grdecl: "Grdecl") -> UnstructuredGrid:
+    """Filter each property in ``grdecl.props`` to active cells in the
+    grid's order. Returns a NEW :class:`UnstructuredGrid` (frozen) with
+    the populated ``props`` dict — the input grid is not mutated.
+
+    Active-cell filtering uses :attr:`IndexMap.linear_to_cell` (PR-9):
+    ``new_props[k] = grdecl.props[k][index_map.linear_to_cell].copy()``.
+
+    Raises ``ValueError`` if ``grdecl.cart_dims`` differs from
+    ``grid.cart_dims``. Property dtypes are preserved (PR-4's whitelist
+    classifies float vs int32 at parse time).
+    """
+    if grid.cart_dims != grdecl.cart_dims:
+        raise ValueError(
+            f"cart_dims mismatch: grid={grid.cart_dims} vs "
+            f"grdecl={grdecl.cart_dims}"
+        )
+    idx = grid.index_map.linear_to_cell      # (n_active,)
+    new_props = {k: v[idx].copy() for k, v in grdecl.props.items()}
+    return dataclasses.replace(grid, props=new_props, _index_map=None)
 
 
 def _read_cell_corners_from_P(P: np.ndarray, nx: int, ny: int, nz: int) -> np.ndarray:
@@ -400,7 +485,7 @@ def _active_lookup(idx_arr: np.ndarray, actnum_flat: np.ndarray) -> np.ndarray:
     return result
 
 
-def build_topology(cube: CornerCube) -> _TopoMesh:
+def build_topology(cube: CornerCube) -> UnstructuredGrid:
     """Assemble i+j+k faces, invert to cell_faces, drop inactive +
     zero-volume cells, and rebuild contiguous cell ids.
 
@@ -557,7 +642,7 @@ def build_topology(cube: CornerCube) -> _TopoMesh:
     k_idx = kept_old_idx // (nx * ny)
     original_ijk = np.stack([i_idx, j_idx, k_idx], axis=1).astype(np.int64)
 
-    return _TopoMesh(
+    return UnstructuredGrid(
         nodes=cube.nodes,
         faces=final_faces,
         cell_faces=cell_faces_new,

@@ -22,6 +22,12 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 @pytest.fixture
+def fixtures() -> Path:
+    """Path to the shared GRDECL fixture directory (PR-12)."""
+    return FIXTURES
+
+
+@pytest.fixture
 def mesh_2x2x2():
     """Topology mesh for the all-active 2x2x2 cartesian deck."""
     cube = from_grdecl(read_grdecl(FIXTURES / "simple_2x2x2.grdecl"))

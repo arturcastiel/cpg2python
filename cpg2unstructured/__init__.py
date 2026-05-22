@@ -27,6 +27,8 @@ from cpg2unstructured.grdecl_reader import Grdecl, read_grdecl
 from cpg2unstructured.index_map import IndexMap
 from cpg2unstructured.unstructured import (
     Faces,
+    UnstructuredGrid,
+    attach_props,
     build_topology,
     find_i_faces,
     find_ij_faces,
@@ -48,6 +50,8 @@ __all__ = [
     "find_k_faces",
     "find_ij_faces",
     "build_topology",
+    "UnstructuredGrid",
+    "attach_props",
     "FaceGeometry",
     "CellGeometry",
     "face_geometry",

@@ -101,3 +101,30 @@ All notable changes to this project will be documented in this file.
   tests (downscaled from the spec's 10×10×5 to keep the synthetic
   GRDECL string + parse cheap). Top-level re-exports for
   `cell_adjacency_csgraph` and `shortest_path_fast` (PR-11).
+- `UnstructuredGrid` — public face of the package; promotes the
+  internal `_TopoMesh` dataclass into a documented API with a
+  read-only properties dict, a `grid["PORO"]` accessor, `n_cells`
+  property, lazy-cached `index_map` property, and `__contains__`.
+  All previous fields (`nodes`, `faces`, `cell_faces`, `cell_corners`,
+  `original_ijk`, `cart_dims`) carry over unchanged. `_TopoMesh`
+  survives as a backward-compat type alias so existing
+  `cpg2unstructured.graph` imports keep working unchanged. Frozen
+  dataclass; the lazy `_index_map` cache uses `object.__setattr__`
+  (D-PR12-1, same pattern `functools.cached_property` uses on frozen
+  dataclasses). `build_topology` now returns `UnstructuredGrid`
+  (typed); the runtime shape is identical to PR-7's `_TopoMesh`.
+- `attach_props(grid, grdecl) -> UnstructuredGrid` filters every
+  property in `grdecl.props` (Eclipse-natural, length `NX·NY·NZ`)
+  down to active-cell order via `grid.index_map.linear_to_cell`.
+  Returns a NEW grid (via `dataclasses.replace`) — the input grid is
+  not mutated. Raises `ValueError` on `cart_dims` mismatch with a
+  helpful diff. Property dtypes (float64 / int32) are preserved from
+  PR-4's whitelist classification. Missing-key access via
+  `grid["DOES_NOT_EXIST"]` raises `KeyError` listing the available
+  property keys. New `tests/test_props.py` (13 tests) covers round-trip,
+  active-cell filtering, dtype preservation, purity, frozen
+  enforcement, lazy IndexMap caching, and a PR-10 graph
+  interop regression (the rename must not break callers). New
+  `fixtures` pytest fixture in `tests/conftest.py` exposes the
+  fixture-path constant for tests that need it. Top-level re-exports
+  for `UnstructuredGrid` and `attach_props` (PR-12).
