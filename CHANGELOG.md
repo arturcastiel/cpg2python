@@ -4,7 +4,31 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-_(empty — next release window.)_
+### Added (phase 2-faults — working toward v0.2.0)
+- `cpg2unstructured.unstructured._faulted_pillar_mask_{i,j,k}` —
+  per-cell-pair bool predicates that return ndarrays of shape
+  `(NX-1, NY, NZ)` / `(NX, NY-1, NZ)` / `(NX, NY, NZ-1)`. True means
+  the active face between the cell pair has non-matching-Z corner
+  values. Replaces the v0.1.0 `_verify_matching_z_*` raise-on-fault
+  helpers (renamed; D-2F-1). The new predicate is the dispatch
+  primitive that future PRs (PR-6/PR-7/PR-8) will use to widen
+  `find_*_faces` to handle faulted decks inline. Currently
+  `find_*_faces` and `build_topology` still raise `NonMatchingZError`
+  on faulted decks — behaviour-preserving — but the new
+  `simple_faulted_2x2x2.grdecl` fixture exercises the new mask
+  helpers and confirms the rename refactor is correct. (PR-1 of
+  phase 2-faults.)
+- `tests/fixtures/simple_faulted_2x2x2.grdecl` — 8-cell deck with a
+  HALF-CELL Z fault between i=0 and i=1 columns. All-active vertical
+  pillars 0..3 (extra headroom for the offset bot). The i=0 column
+  cells use Z values 0/1/2, the i=1 column uses 0.5/1.5/2.5 — pure
+  per-column offset, no j or k faulting.
+- `tests/test_faulted_mask.py` — 11 tests covering matching-Z
+  fixtures (all 3 mask helpers return all-False on simple_2x2x2,
+  simple_3x3x2, with_include), the faulted fixture (mask flips True
+  along the i-fault stack only), behaviour-preserving raise points
+  in `find_i_faces`/`find_j_faces`/`find_k_faces`/`build_topology`,
+  and a Tier A regression test on matching-Z `find_i_faces`.
 
 ## [0.1.0] - 2026-05-22
 
