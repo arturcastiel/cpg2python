@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added (phase 2-faults — working toward v0.2.0)
+- **`find_i_faces` widened to dispatch matching-Z vs faulted inline**
+  (D-2F-1). When no faulted stacks are present, the matching-Z fast
+  path is byte-identical to v0.1.0 (Tier A invariance). When faulted
+  stacks are present, the matching-Z path runs with faulted stacks
+  excluded and concatenates with the output of
+  ``_find_faulted_i_faces`` (PR-5). On the simple_faulted_2x2x2
+  fixture, `find_i_faces` now returns 14 i-faces total (8 boundary +
+  6 fault inner faces), where v0.1.0 raised `NonMatchingZError`.
+  `build_topology` and `find_j_faces` / `find_k_faces` still raise
+  on faulted decks — those widenings land in PR-7 (j), PR-8 (k),
+  and PR-8 also drops the top-level `build_topology` raise. 8 new
+  tests in `tests/test_find_i_faces_dispatch.py` cover the Tier A
+  fast path on 3 matching-Z fixtures (byte-identical face counts),
+  the dispatch on the faulted fixture (14 total i-faces, valid
+  node + neighbour IDs, _move_minus_one_to_col1 convention preserved,
+  inner vs boundary face split 6/8), and the still-raising
+  `build_topology` guard. The corresponding test in
+  `tests/test_faulted_mask.py` (`test_find_i_faces_still_raises_on_faulted_fixture`)
+  was renamed to `test_find_i_faces_dispatches_on_faulted_fixture`
+  and updated to expect the new dispatching behaviour. (PR-6 of
+  phase 2-faults.)
 - `cpg2unstructured.unstructured._find_faulted_i_faces` — first
   end-to-end integration of phase 2-faults. Walks every faulted
   i-pillar-pair stack, builds (za, zb) arrays from cube.P + cube.nodes,
