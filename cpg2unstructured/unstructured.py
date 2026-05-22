@@ -114,25 +114,35 @@ def _expand_actnum_axis_i(plane: np.ndarray) -> np.ndarray:
 # ── i-faces ─────────────────────────────────────────────────────────────────
 
 
-def _verify_matching_z_i(P: np.ndarray, actnum_3d: np.ndarray) -> None:
-    """Raise NonMatchingZError if an active-active i-plane disagrees.
+def _faulted_pillar_mask_i(P: np.ndarray, actnum_3d: np.ndarray) -> np.ndarray:
+    """Per-cell-pair faulted mask along the i direction.
+
+    Returns
+    -------
+    (NX-1, NY, NZ) bool — True at (i, j, k) means the active i-face
+    between cells (i, j, k) and (i+1, j, k) is NON-MATCHING (faulted).
+    False if matching-Z OR at least one of the two cells is inactive
+    (in which case the face isn't an active-active i-face).
 
     Compares only at corner-slot positions where BOTH adjacent cells
-    are active. PR-5's `-1` sentinel for inactive cells would
+    are active. PR-5's ``-1`` sentinel for inactive cells would
     otherwise produce spurious mismatches (D-PR6-3).
+
+    Replaces phase 1-design's ``_verify_matching_z_i`` raise-on-fault
+    helper. Phase 2-faults (D-2F-1) widens ``find_*_faces`` to dispatch
+    matching vs faulted; this predicate is the dispatch primitive.
     """
-    nx = actnum_3d.shape[0]
+    nx, ny, nz = actnum_3d.shape
+    mask = np.zeros((nx - 1, ny, nz), dtype=bool)
     for i in range(1, nx):
         right_of_left = P[2 * i - 1]
         left_of_right = P[2 * i]
-        mask = _expand_actnum_axis_i(actnum_3d[i - 1]) & _expand_actnum_axis_i(actnum_3d[i])
-        diff = (right_of_left != left_of_right) & mask
-        if diff.any():
-            jk = np.argwhere(diff)[0]
-            raise NonMatchingZError(
-                f"non-matching-Z across i={i} at (j={jk[0] // 2}, "
-                f"k={jk[1] // 2}) — v2 only"
-            )
+        slot_diff = right_of_left != left_of_right          # (2*NY, 2*NZ)
+        # Reduce 4 corner-slots per (j, k) cell pair → one bool
+        cell_diff = slot_diff.reshape(ny, 2, nz, 2).any(axis=(1, 3))
+        active_pair = actnum_3d[i - 1] & actnum_3d[i]
+        mask[i - 1] = cell_diff & active_pair
+    return mask
 
 
 def _i_face_quads(P: np.ndarray) -> np.ndarray:
@@ -164,7 +174,12 @@ def find_i_faces(cube: CornerCube) -> Faces:
     nx, ny, nz = cube.cart_dims
     P = cube.P
     actnum_3d = cube.actnum_3d
-    _verify_matching_z_i(P, actnum_3d)
+    faulted = _faulted_pillar_mask_i(P, actnum_3d)
+    if faulted.any():
+        i, j, k = map(int, np.argwhere(faulted)[0])
+        raise NonMatchingZError(
+            f"non-matching-Z across i={i + 1} at (j={j}, k={k}) — v2 only"
+        )
 
     quads_raw = _i_face_quads(P)
     quads = np.sort(quads_raw, axis=-1)
@@ -188,22 +203,26 @@ def find_i_faces(cube: CornerCube) -> Faces:
 # ── j-faces (symmetric, i ↔ j) ──────────────────────────────────────────────
 
 
-def _verify_matching_z_j(P: np.ndarray, actnum_3d: np.ndarray) -> None:
-    """Raise NonMatchingZError if an active-active j-plane disagrees."""
-    ny = actnum_3d.shape[1]
+def _faulted_pillar_mask_j(P: np.ndarray, actnum_3d: np.ndarray) -> np.ndarray:
+    """Per-cell-pair faulted mask along the j direction.
+
+    Returns
+    -------
+    (NX, NY-1, NZ) bool — True at (i, j, k) means the active j-face
+    between cells (i, j, k) and (i, j+1, k) is non-matching.
+
+    See :func:`_faulted_pillar_mask_i` for context.
+    """
+    nx, ny, nz = actnum_3d.shape
+    mask = np.zeros((nx, ny - 1, nz), dtype=bool)
     for j in range(1, ny):
         front_of_low = P[:, 2 * j - 1]
         back_of_high = P[:, 2 * j]
-        mask_l = _expand_actnum_axis_i(actnum_3d[:, j - 1])
-        mask_r = _expand_actnum_axis_i(actnum_3d[:, j])
-        mask = mask_l & mask_r
-        diff = (front_of_low != back_of_high) & mask
-        if diff.any():
-            ik = np.argwhere(diff)[0]
-            raise NonMatchingZError(
-                f"non-matching-Z across j={j} at (i={ik[0] // 2}, "
-                f"k={ik[1] // 2}) — v2 only"
-            )
+        slot_diff = front_of_low != back_of_high            # (2*NX, 2*NZ)
+        cell_diff = slot_diff.reshape(nx, 2, nz, 2).any(axis=(1, 3))
+        active_pair = actnum_3d[:, j - 1] & actnum_3d[:, j]
+        mask[:, j - 1] = cell_diff & active_pair
+    return mask
 
 
 def _j_face_quads(P: np.ndarray) -> np.ndarray:
@@ -229,7 +248,12 @@ def find_j_faces(cube: CornerCube) -> Faces:
     nx, ny, nz = cube.cart_dims
     P = cube.P
     actnum_3d = cube.actnum_3d
-    _verify_matching_z_j(P, actnum_3d)
+    faulted = _faulted_pillar_mask_j(P, actnum_3d)
+    if faulted.any():
+        i, j, k = map(int, np.argwhere(faulted)[0])
+        raise NonMatchingZError(
+            f"non-matching-Z across j={j + 1} at (i={i}, k={k}) — v2 only"
+        )
 
     quads_raw = _j_face_quads(P)
     quads = np.sort(quads_raw, axis=-1)
@@ -267,27 +291,28 @@ def find_ij_faces(cube: CornerCube) -> Faces:
 # ── k-faces (PR-7) ──────────────────────────────────────────────────────────
 
 
-def _verify_matching_z_k(P: np.ndarray, actnum_3d: np.ndarray) -> None:
-    """Raise NonMatchingZError if an active-active k-plane disagrees.
+def _faulted_pillar_mask_k(P: np.ndarray, actnum_3d: np.ndarray) -> np.ndarray:
+    """Per-cell-pair faulted mask along the k direction.
 
-    Mirrors `_verify_matching_z_i` along the k axis (D-PR7-5).
-    Cartesian + pinchout decks pass; stair-stepped non-matching-Z grids
-    raise.
+    Returns
+    -------
+    (NX, NY, NZ-1) bool — True at (i, j, k) means the active k-face
+    between cells (i, j, k) and (i, j, k+1) is non-matching.
+
+    Mirrors :func:`_faulted_pillar_mask_i` along the k axis (D-PR7-5).
+    Cartesian + pinchout decks produce all-False (matching-Z);
+    stair-stepped k-direction faults flip bits to True.
     """
-    nz = actnum_3d.shape[2]
+    nx, ny, nz = actnum_3d.shape
+    mask = np.zeros((nx, ny, nz - 1), dtype=bool)
     for k in range(1, nz):
         bot_of_top = P[:, :, 2 * k - 1]
         top_of_bot = P[:, :, 2 * k]
-        mask_l = np.repeat(np.repeat(actnum_3d[:, :, k - 1], 2, axis=0), 2, axis=1)
-        mask_r = np.repeat(np.repeat(actnum_3d[:, :, k],     2, axis=0), 2, axis=1)
-        mask = mask_l & mask_r
-        diff = (bot_of_top != top_of_bot) & mask
-        if diff.any():
-            ij = np.argwhere(diff)[0]
-            raise NonMatchingZError(
-                f"non-matching-Z across k={k} at (i={ij[0] // 2}, "
-                f"j={ij[1] // 2}) — v2 only"
-            )
+        slot_diff = bot_of_top != top_of_bot                # (2*NX, 2*NY)
+        cell_diff = slot_diff.reshape(nx, 2, ny, 2).any(axis=(1, 3))
+        active_pair = actnum_3d[:, :, k - 1] & actnum_3d[:, :, k]
+        mask[:, :, k - 1] = cell_diff & active_pair
+    return mask
 
 
 def _k_face_quads(P: np.ndarray) -> np.ndarray:
@@ -318,7 +343,12 @@ def find_k_faces(cube: CornerCube) -> Faces:
     nx, ny, nz = cube.cart_dims
     P = cube.P
     actnum_3d = cube.actnum_3d
-    _verify_matching_z_k(P, actnum_3d)
+    faulted = _faulted_pillar_mask_k(P, actnum_3d)
+    if faulted.any():
+        i, j, k = map(int, np.argwhere(faulted)[0])
+        raise NonMatchingZError(
+            f"non-matching-Z across k={k + 1} at (i={i}, j={j}) — v2 only"
+        )
 
     quads_raw = _k_face_quads(P)
     quads = np.sort(quads_raw, axis=-1)
@@ -497,9 +527,19 @@ def build_topology(cube: CornerCube) -> UnstructuredGrid:
     actnum_3d = cube.actnum_3d
     n_old = nx * ny * nz
 
-    _verify_matching_z_i(P, actnum_3d)
-    _verify_matching_z_j(P, actnum_3d)
-    _verify_matching_z_k(P, actnum_3d)
+    # PR-1 of 2-faults: build_topology still rejects faulted decks
+    # at the top-level (matching prior v0.1.0 behaviour). The widening
+    # to dispatch matching vs faulted lands in PR-6/7/8.
+    # Message must contain "v2 only" — Tier A regression test
+    # tests/test_unstructured.py::test_fault_still_raises_in_build_topology
+    # asserts that substring.
+    if (_faulted_pillar_mask_i(P, actnum_3d).any()
+            or _faulted_pillar_mask_j(P, actnum_3d).any()
+            or _faulted_pillar_mask_k(P, actnum_3d).any()):
+        raise NonMatchingZError(
+            "non-matching-Z grid not yet supported by build_topology "
+            "(phase 2-faults in progress — v2 only)"
+        )
 
     # Cell index lookup with boundary padding — stores original F-order
     # cell index (0..n_old-1) or -1 for boundary positions.
