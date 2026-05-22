@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added (phase 2-faults — working toward v0.2.0)
+- `cpg2unstructured._fault_connections` module — pure 1D segment-overlap
+  algorithm used to pair up faulted-stack cells. Three functions:
+  `overlap(xa1, xa2, xb1, xb2) -> bool` (strict interval overlap),
+  `do_intersect(za_top, za_bot, zb_top, zb_bot) -> bool` (A-face vs
+  B-face overlap including pinch guards and "le fix speciale" for the
+  diamond case where two faces cross without single-pillar overlap),
+  and `find_connections(za, zb) -> (n, 2) int64` (the sweep-line
+  driver — walks A-cells outer, B-cells inner with per-pillar
+  checkpoint tracking for amortised O(n_a + n_b) cost). No geometry
+  in this PR — pure integer index pairs out. Tests on the §6b worked
+  example confirm 3 connections for the 2×2 half-offset case;
+  17 unit tests in `tests/test_fault_connections.py` cover overlap +
+  do_intersect predicates (including diamond + pinch edge cases),
+  matching stacks, fully-disjoint stacks, asymmetric stack sizes,
+  pinched A-cells in the middle of a stack, and the int64 type
+  contract on empty outputs. (PR-2 of phase 2-faults.)
+
 - `cpg2unstructured.unstructured._faulted_pillar_mask_{i,j,k}` —
   per-cell-pair bool predicates that return ndarrays of shape
   `(NX-1, NY, NZ)` / `(NX, NY-1, NZ)` / `(NX, NY, NZ-1)`. True means
