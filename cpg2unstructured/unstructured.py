@@ -530,12 +530,15 @@ def build_topology(cube: CornerCube) -> UnstructuredGrid:
     # PR-1 of 2-faults: build_topology still rejects faulted decks
     # at the top-level (matching prior v0.1.0 behaviour). The widening
     # to dispatch matching vs faulted lands in PR-6/7/8.
+    # Message must contain "v2 only" — Tier A regression test
+    # tests/test_unstructured.py::test_fault_still_raises_in_build_topology
+    # asserts that substring.
     if (_faulted_pillar_mask_i(P, actnum_3d).any()
             or _faulted_pillar_mask_j(P, actnum_3d).any()
             or _faulted_pillar_mask_k(P, actnum_3d).any()):
         raise NonMatchingZError(
             "non-matching-Z grid not yet supported by build_topology "
-            "(phase 2-faults in progress)"
+            "(phase 2-faults in progress — v2 only)"
         )
 
     # Cell index lookup with boundary padding — stores original F-order

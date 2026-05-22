@@ -116,6 +116,8 @@ def test_find_k_faces_no_raise_on_faulted_fixture(fixtures):
 def test_build_topology_still_raises_on_faulted_fixture(fixtures):
     g = read_grdecl(fixtures / "simple_faulted_2x2x2.grdecl")
     cube = from_grdecl(g)
+    # Message contains both "not yet supported" (new context) and
+    # "v2 only" (preserved for the Tier A regression test).
     with pytest.raises(NonMatchingZError, match="not yet supported"):
         build_topology(cube)
 
