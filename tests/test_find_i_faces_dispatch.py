@@ -115,11 +115,12 @@ def test_simple_faulted_2x2x2_neighbour_col0_smaller(fixtures):
 # ── build_topology still raises on faulted (PR-8 will widen it) ────
 
 
-def test_build_topology_still_raises_on_faulted_fixture(fixtures):
-    """build_topology's top-level fault check still rejects all
-    fault directions until PR-8 lands (the last direction widening)."""
+def test_build_topology_succeeds_on_i_faulted_fixture(fixtures):
+    """Post-PR-8: build_topology end-to-end on simple_faulted_2x2x2.
+    find_i_faces dispatches → build_topology assembles correctly."""
     from cpg2unstructured import build_topology
     g = read_grdecl(fixtures / "simple_faulted_2x2x2.grdecl")
     cube = from_grdecl(g)
-    with pytest.raises(NonMatchingZError, match="v2 only"):
-        build_topology(cube)
+    grid = build_topology(cube)
+    assert grid is not None
+    assert grid.n_cells == 8

@@ -130,13 +130,15 @@ def test_find_k_faces_no_raise_on_faulted_fixture(fixtures):
     assert faces is not None
 
 
-def test_build_topology_still_raises_on_faulted_fixture(fixtures):
+def test_build_topology_succeeds_on_faulted_fixture(fixtures):
+    """Post-PR-8: build_topology end-to-end on simple_faulted_2x2x2.
+    find_i_faces dispatches the i-fault; build_topology assembles the
+    full UnstructuredGrid."""
     g = read_grdecl(fixtures / "simple_faulted_2x2x2.grdecl")
     cube = from_grdecl(g)
-    # Message contains both "not yet supported" (new context) and
-    # "v2 only" (preserved for the Tier A regression test).
-    with pytest.raises(NonMatchingZError, match="not yet supported"):
-        build_topology(cube)
+    grid = build_topology(cube)
+    assert grid is not None
+    assert grid.n_cells == 8  # 2x2x2 all-active
 
 
 # ── Tier A regression: matching-Z deck still works ───────────────────
