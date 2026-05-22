@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added (phase 2-faults — working toward v0.2.0)
+- `cpg2unstructured._fault_geometry.compute_face_geometry` — the
+  8-position J-table polygon assembler for fault-face polygons.
+  For each connection (a row of the connection table from PR-2),
+  constructs a clockwise polygon whose normal points from cell-A
+  to cell-B. Output polygons have between 3 and 8 corners depending
+  on which envelope crossings + diamond cases trigger. Input: ``pa``,
+  ``pb`` of shape ``(n, 4)`` int64 (node IDs for A-face and B-face
+  corners, column order ``[bot_p1, bot_p2, top_p1, top_p2]``), plus
+  global points table ``(n_points, 3)`` float64. Output: updated
+  points table (intersection nodes appended), ``num_nodes`` per face,
+  flat ``corners`` array splittable via ``cumsum(num_nodes)``.
+  Implements all 4 diamond cases from MRST (Cases 1/2 for A12 × B34,
+  Cases 3/4 for A34 × B12), pillar pinch dedup (bot == top on the
+  same pillar collapses), and intersection dedup via ``np.unique``.
+  Direct port of MRST's ``computeFaceGeometry`` (``processGRDECL.m``
+  lines 853-1160). 12 unit tests in
+  ``tests/test_compute_face_geometry.py`` cover empty input, matching
+  faces (single + multi-row), simple half-offset (no crossings),
+  top-edge crossing (5 corners with p6), bot-edge crossing (5
+  corners with p2), both-edge crossings (6 corners), diamond Case 1
+  (vertex@7 with two pillar nullifications), pillar-pinch (3-corner
+  triangle), no-intersection contract (points unchanged), new-node
+  ID contiguity, and clockwise normal invariant on matching faces.
+  (PR-4 of phase 2-faults — the algorithmic hot spot.)
 - `cpg2unstructured._fault_geometry.line_intersection` — XYZ
   intersection of two line-segment families, parametrised by z.
   Two lines, each defined by its start + end XYZ on the same pillar
