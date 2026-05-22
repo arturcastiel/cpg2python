@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+
+_(empty — next release window.)_
+
+## [0.1.0] - 2026-05-22
+
+First "you can actually use this" alpha release. NumPy-only by default;
+optional scipy.sparse fast path under `[fast]`. Matching-Z grids only.
+Not on PyPI — local editable install per the README.
+
 ### Added
 - Initial repo skeleton (PR-1).
 - Toy 2×2×2 cartesian CPG fixture + reference topology pipeline
@@ -128,3 +137,20 @@ All notable changes to this project will be documented in this file.
   `fixtures` pytest fixture in `tests/conftest.py` exposes the
   fixture-path constant for tests that need it. Top-level re-exports
   for `UnstructuredGrid` and `attach_props` (PR-12).
+- Full README rewrite: status banner, install paths (`-e .`,
+  `-e .[fast]`, `-e .[dev]`), 30-second quickstart, API map with
+  per-function PR links, `UnstructuredGrid`-at-a-glance reference,
+  v0.1.0 limitations. `examples/quickstart.py` is a runnable demo
+  that parses `examples/quickstart.grdecl` (a self-contained 5×5×3
+  deck with 70 active cells, mild PORO heterogeneity, and 5 inactive
+  cells to exercise filtering) end-to-end through parse → mesh →
+  properties → graph → shortest path; if scipy is installed it also
+  exercises the fast path. Version stamped at **0.1.0** in
+  `pyproject.toml` and `cpg2unstructured.__version__` (PR-13).
+
+### Known limitations
+- Matching-Z (no fault) grids only — non-matching-Z raises
+  `NonMatchingZError`.
+- ASCII GRDECL only; no `.EGRID` binary.
+- Single-process, in-memory.
+- Not on PyPI yet — local editable install only (D-06).
