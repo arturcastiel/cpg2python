@@ -1,24 +1,12 @@
 import numpy as np
 import pytest
-from pathlib import Path
 
 from cpg2unstructured import (
-    build_topology,
     cell_adjacency,
     cell_geometry,
     face_geometry,
-    from_grdecl,
-    read_grdecl,
     shortest_path,
 )
-
-FIXTURES = Path(__file__).parent / "fixtures"
-
-
-@pytest.fixture
-def mesh_2x2x2():
-    cube = from_grdecl(read_grdecl(FIXTURES / "simple_2x2x2.grdecl"))
-    return build_topology(cube)
 
 
 def test_edge_count_2x2x2(mesh_2x2x2):
