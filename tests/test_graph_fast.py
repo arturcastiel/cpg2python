@@ -36,17 +36,31 @@ def test_csr_directed_count_matches_slow(mesh_2x2x2):
     assert csr.nnz == n_slow_directed
 
 
-def test_unit_weight_path_identical_2x2x2(mesh_2x2x2):
+def test_unit_weight_corner_to_corner_2x2x2(mesh_2x2x2):
     """For the 2x2x2 corner-to-corner walk, unit-weight slow and fast
-    paths must agree on cost AND path (unique 3-hop route up to
-    symmetry; Dijkstra's deterministic tie-break gives the same one)."""
+    paths must agree on cost and length. The 2x2x2 grid has SIX
+    equal-cost 3-hop routes from cell 0 to cell 7; tie-breaking
+    between heapq-Python and scipy's C impl is not guaranteed
+    identical (Q-PR11-2 confirmed empirically — DEV-02). So we
+    assert cost + length + endpoint validity, NOT path-list equality.
+    """
     n = mesh_2x2x2.cell_faces.shape[0]
     adj = cell_adjacency(mesh_2x2x2, weights="unit")
     csr = cell_adjacency_csgraph(mesh_2x2x2, weights="unit")
     d_slow, p_slow = shortest_path(adj, 0, n - 1)
     d_fast, p_fast = shortest_path_fast(csr, 0, n - 1)
     assert d_slow == d_fast == 3.0
-    assert p_slow == p_fast
+    assert len(p_slow) == len(p_fast) == 4
+    assert p_slow[0] == p_fast[0] == 0
+    assert p_slow[-1] == p_fast[-1] == n - 1
+    # Both paths must be valid in the slow adjacency (every consecutive
+    # pair is a neighbour with weight 1.0).
+    slow_neighbours = [{nb for nb, _ in row} for row in adj]
+    for path in (p_slow, p_fast):
+        for u, v in zip(path[:-1], path[1:]):
+            assert v in slow_neighbours[u], (
+                f"invalid hop {u}→{v} in path {path}"
+            )
 
 
 def test_full_source_mode_2x2x2(mesh_2x2x2):
