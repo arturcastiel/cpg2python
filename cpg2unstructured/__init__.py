@@ -17,7 +17,12 @@ from cpg2unstructured.geometry import (
     cell_geometry,
     face_geometry,
 )
-from cpg2unstructured.graph import cell_adjacency, shortest_path
+from cpg2unstructured.graph import (
+    cell_adjacency,
+    cell_adjacency_csgraph,
+    shortest_path,
+    shortest_path_fast,
+)
 from cpg2unstructured.grdecl_reader import Grdecl, read_grdecl
 from cpg2unstructured.index_map import IndexMap
 from cpg2unstructured.unstructured import (
@@ -49,7 +54,9 @@ __all__ = [
     "cell_geometry",
     "IndexMap",
     "cell_adjacency",
+    "cell_adjacency_csgraph",
     "shortest_path",
+    "shortest_path_fast",
     "Cpg2UError",
     "GrdeclError",
     "GrdeclSyntaxError",

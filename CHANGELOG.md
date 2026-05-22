@@ -81,3 +81,23 @@ All notable changes to this project will be documented in this file.
   `ValueError("no path …")`. Scipy-free; PR-11 will add a
   scipy-CSR fast path under the `[fast]` extra. Top-level re-exports
   for `cell_adjacency` and `shortest_path` (PR-10).
+- Optional scipy.sparse fast path under the `[fast]` extra.
+  `cell_adjacency_csgraph(mesh, weights=...)` returns a symmetric
+  `scipy.sparse.csr_array` of shape `(n_active, n_active)`; nnz equals
+  the slow-path directed-edge count. `shortest_path_fast(csr, src,
+  dst=None)` wraps `scipy.sparse.csgraph.dijkstra` — drop-in for
+  `shortest_path` when `dst` is an int (returns `(dist, path)`),
+  full-source mode when `dst is None` (returns `(distances,
+  predecessors)` arrays). Distances agree with the pure-numpy path to
+  `atol=1e-12` (`rtol=0`); tie-breaking on equal-cost routes may
+  differ between heapq-Python and scipy's C impl, so the agreement
+  test asserts cost-only on the distance-weight case. Without scipy,
+  importing the package still works; calling the fast functions
+  raises `ImportError` whose message names the `[fast]` extra. New
+  `tests/test_graph_fast.py` is skipped via `pytest.importorskip` when
+  scipy is absent. `tests/conftest.py` added — `mesh_2x2x2` moved
+  here from `tests/test_graph.py`; new `mesh_5x5x3_with_centroids`
+  session fixture builds a synthetic 75-cell deck for agreement
+  tests (downscaled from the spec's 10×10×5 to keep the synthetic
+  GRDECL string + parse cheap). Top-level re-exports for
+  `cell_adjacency_csgraph` and `shortest_path_fast` (PR-11).
