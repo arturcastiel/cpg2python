@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added (phase 2-faults — working toward v0.2.0)
+- **`find_i_faces` widened to dispatch matching-Z vs faulted inline**
+  (D-2F-1). When no faulted stacks are present, the matching-Z fast
+  path is byte-identical to v0.1.0 (Tier A invariance). When faulted
+  stacks are present, the matching-Z path runs with faulted (i, j)
+  stacks dropped and concatenates with the output of
+  ``_find_faulted_i_faces`` (PR-5). On the simple_faulted_2x2x2
+  fixture, `find_i_faces` now returns 14 i-faces (8 boundary + 6
+  fault inner) where v0.1.0 raised `NonMatchingZError`.
+  `build_topology` and `find_j_faces` / `find_k_faces` still raise
+  on faulted decks; those widenings land in PR-7 (j), PR-8 (k) +
+  PR-8 drops the `build_topology` raise. The v0.1.0 Tier A test
+  `test_fault_raises_clean_error` was renamed to
+  `test_fault_dispatches_in_find_i_faces` and updated to assert
+  success: `find_i_faces(fault_simple)` now returns 12 i-faces
+  (2 fault via dispatch + 10 matching) instead of raising. 8 new
+  tests in `tests/test_find_i_faces_dispatch.py` cover the Tier A
+  fast path on 3 matching-Z fixtures and the dispatch on the faulted
+  fixture (face counts, valid node + neighbour IDs,
+  _move_minus_one_to_col1 convention, inner/boundary split 6/8,
+  still-raising `build_topology` guard). (PR-6 of phase 2-faults
+  — note: PR-6 shipped as the (#19) main merge plus a follow-up
+  PR that added the missing CHANGELOG entry and the
+  `test_unstructured.py` rename, both lost to a stash/pop race
+  with the wrong PR-5 re-run.)
 - `cpg2unstructured.unstructured._find_faulted_i_faces` — first
   end-to-end integration of phase 2-faults. Walks every faulted
   i-pillar-pair stack, builds (za, zb) arrays from cube.P + cube.nodes,
