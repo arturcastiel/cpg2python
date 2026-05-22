@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added (phase 2-faults — working toward v0.2.0)
+- **`find_j_faces` widened to dispatch matching-Z vs faulted inline**
+  (D-2F-1, symmetric to PR-6). Adds the new `_find_faulted_j_faces`
+  helper that mirrors `_find_faulted_i_faces` along the j-axis:
+  walks each faulted (i, j) j-pillar-pair stack, builds (za, zb) z
+  arrays + pa/pb corner-id arrays from the +j/−j sides of A/B cells
+  (j-slots 2j+1 and 2j+2), calls `find_connections` then
+  `compute_face_geometry`, and emits a Faces record with
+  `direction = 1`. When the j-mask is empty, the matching-Z fast path
+  is byte-identical to v0.1.0 (Tier A invariance). PR-5 restrictions
+  carry over: all-active stacks + 4-corner polygons only. New test
+  fixture `tests/fixtures/simple_faulted_2x2x2_j.grdecl` is a
+  j-axis mirror of `simple_faulted_2x2x2.grdecl` (j=0 row flat,
+  j=1 row offset +0.5 — produces 2 i-stacks × 3 connections =
+  6 j-fault faces). 9 new tests in
+  `tests/test_find_j_faces_dispatch.py` cover Tier A invariance on
+  3 matching-Z fixtures, the dispatch on the new j-fault fixture
+  (14 total j-faces, 6 inner / 8 boundary, direction=1, valid
+  node + neighbour IDs, `_move_minus_one_to_col1` convention),
+  and the still-raising `build_topology` guard.  `build_topology`
+  and `find_k_faces` still raise on faulted decks — PR-8 widens
+  `find_k_faces` and drops the `build_topology` guard. (PR-7 of
+  phase 2-faults.)
 - **`find_i_faces` widened to dispatch matching-Z vs faulted inline**
   (D-2F-1). When no faulted stacks are present, the matching-Z fast
   path is byte-identical to v0.1.0 (Tier A invariance). When faulted

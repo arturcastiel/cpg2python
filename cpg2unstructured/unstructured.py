@@ -469,17 +469,162 @@ def _j_face_quads(P: np.ndarray) -> np.ndarray:
     return out
 
 
+def _find_faulted_j_faces(cube: CornerCube) -> tuple[Faces, np.ndarray]:
+    """Build j-direction fault faces from non-matching-Z pillar pairs.
+
+    Symmetric to :func:`_find_faulted_i_faces` along the j-axis.
+    Walks every faulted (i, j) j-pillar-pair stack and emits a face
+    per connection produced by :func:`find_connections`.
+
+    Restrictions (same as PR-5/PR-6 — lifted in PR-9):
+        - All-active stacks only.
+        - 4-corner fault polygons only.
+
+    Returns
+    -------
+    faces : :class:`Faces`
+        Fault j-faces with ``direction = 1``.
+    new_points : (n_points, 3) float64
+        Updated node table — under the 4-corner restriction, this is
+        a copy of ``cube.nodes`` (no intersection nodes appended).
+    """
+    P = cube.P
+    nodes = cube.nodes
+    actnum_3d = cube.actnum_3d
+    nx, ny, nz = cube.cart_dims
+
+    faulted = _faulted_pillar_mask_j(P, actnum_3d)
+    if not faulted.any():
+        return _empty_faces(direction=1), nodes
+
+    # Per-(i, j) j-stack mask: any k flagged.
+    stack_faulted = faulted.any(axis=2)              # (NX, NY-1)
+
+    actnum_flat = actnum_3d.ravel(order="F")
+    flat_active_id = np.full(nx * ny * nz, -1, dtype=np.int64)
+    flat_active_id[actnum_flat] = np.arange(int(actnum_flat.sum()))
+
+    if nz > 0:
+        z_slots_for_rows = np.concatenate(
+            [2 * np.arange(nz), [2 * nz - 1]],
+        )
+    else:
+        z_slots_for_rows = np.zeros(0, dtype=np.int64)
+
+    bot_slots = 2 * np.arange(nz) + 1
+    top_slots = 2 * np.arange(nz)
+
+    quads_chunks: list[np.ndarray] = []
+    nbs_chunks: list[np.ndarray] = []
+
+    for (i_int, j_int) in zip(*np.where(stack_faulted)):
+        i = int(i_int)
+        j = int(j_int)
+
+        a_global = i + j * nx + np.arange(nz) * (nx * ny)
+        b_global = i + (j + 1) * nx + np.arange(nz) * (nx * ny)
+        if not (actnum_flat[a_global].all() and actnum_flat[b_global].all()):
+            raise NonMatchingZError(
+                f"inactive cells in faulted j-stack (i={i}, j={j}-{j+1}) "
+                "— phase 2-faults v0.2.0 supports only all-active fault "
+                "stacks (see PR-9 — v2 only)"
+            )
+        a_active_ids = flat_active_id[a_global]
+        b_active_ids = flat_active_id[b_global]
+
+        # Build za / zb along the j-pillar pair (pillars at i and i+1
+        # on the j+1 boundary).
+        # A-side corners are on the +j side of A-cells: j-slot 2*j+1.
+        # B-side corners are on the -j side of B-cells: j-slot 2*j+2.
+        # Pillar 1 of the face = i-pillar i  (i-slot 2*i).
+        # Pillar 2 of the face = i-pillar i+1 (i-slot 2*i+1).
+        za_p1_ids = P[2 * i,     2 * j + 1, z_slots_for_rows]
+        za_p2_ids = P[2 * i + 1, 2 * j + 1, z_slots_for_rows]
+        zb_p1_ids = P[2 * i,     2 * j + 2, z_slots_for_rows]
+        zb_p2_ids = P[2 * i + 1, 2 * j + 2, z_slots_for_rows]
+        za = np.stack(
+            [nodes[za_p1_ids, 2], nodes[za_p2_ids, 2]], axis=1,
+        )
+        zb = np.stack(
+            [nodes[zb_p1_ids, 2], nodes[zb_p2_ids, 2]], axis=1,
+        )
+
+        pa_stack = np.stack(
+            [
+                P[2 * i,     2 * j + 1, bot_slots],
+                P[2 * i + 1, 2 * j + 1, bot_slots],
+                P[2 * i,     2 * j + 1, top_slots],
+                P[2 * i + 1, 2 * j + 1, top_slots],
+            ],
+            axis=1,
+        )
+        pb_stack = np.stack(
+            [
+                P[2 * i,     2 * j + 2, bot_slots],
+                P[2 * i + 1, 2 * j + 2, bot_slots],
+                P[2 * i,     2 * j + 2, top_slots],
+                P[2 * i + 1, 2 * j + 2, top_slots],
+            ],
+            axis=1,
+        )
+
+        C = find_connections(za, zb)
+        if C.shape[0] == 0:
+            continue
+
+        pa_conn = pa_stack[C[:, 0]]
+        pb_conn = pb_stack[C[:, 1]]
+
+        new_nodes, num_nodes, corners = compute_face_geometry(
+            pa_conn, pb_conn, nodes,
+        )
+
+        if not (num_nodes == 4).all():
+            offender = int(np.argmax(num_nodes != 4))
+            raise NonMatchingZError(
+                f"fault polygon at connection {offender} of j-stack "
+                f"i={i}, j={j}-{j+1} has {int(num_nodes[offender])} "
+                "corners; phase 2-faults v0.2.0 supports only "
+                "4-corner fault polygons (see PR-9 — v2 only)"
+            )
+        if new_nodes.shape[0] != nodes.shape[0]:
+            raise NonMatchingZError(
+                f"unexpected intersection nodes from j-stack "
+                f"i={i}, j={j}-{j+1} — see PR-9 for variable-corner "
+                "support (v2 only)"
+            )
+
+        quads = corners.reshape(C.shape[0], 4)
+        quads_sorted = np.sort(quads, axis=1)
+        nbs = np.stack(
+            [a_active_ids[C[:, 0]], b_active_ids[C[:, 1]]], axis=1,
+        )
+        nbs = _move_minus_one_to_col1(nbs)
+        quads_chunks.append(quads_sorted)
+        nbs_chunks.append(nbs)
+
+    if not quads_chunks:
+        return _empty_faces(direction=1), nodes
+
+    all_quads = np.concatenate(quads_chunks, axis=0)
+    all_nbs = np.concatenate(nbs_chunks, axis=0)
+    direction = np.ones(all_quads.shape[0], dtype=np.int8)
+    return Faces(nodes=all_quads, neighbours=all_nbs,
+                 direction=direction), nodes
+
+
 def find_j_faces(cube: CornerCube) -> Faces:
-    """All j-direction faces (inner + boundary) as a `Faces` record."""
+    """All j-direction faces (inner + boundary) as a ``Faces`` record.
+
+    Dispatches matching-Z stacks to the v0.1.0 fast path and faulted
+    stacks to :func:`_find_faulted_j_faces` (phase 2-faults D-2F-1).
+    When no faulted stacks are present, the output is byte-identical
+    to v0.1.0 — Tier A invariance.
+    """
     nx, ny, nz = cube.cart_dims
     P = cube.P
     actnum_3d = cube.actnum_3d
     faulted = _faulted_pillar_mask_j(P, actnum_3d)
-    if faulted.any():
-        i, j, k = map(int, np.argwhere(faulted)[0])
-        raise NonMatchingZError(
-            f"non-matching-Z across j={j + 1} at (i={i}, k={k}) — v2 only"
-        )
 
     quads_raw = _j_face_quads(P)
     quads = np.sort(quads_raw, axis=-1)
@@ -490,14 +635,38 @@ def find_j_faces(cube: CornerCube) -> Faces:
     cell_id[:, 1:-1] = flat_id.reshape(nx, ny, nz, order="F")
     low  = cell_id[:, 0:ny + 1]
     high = cell_id[:, 1:ny + 2]
-
     keep = ((low != -1) | (high != -1)).ravel()
-    faces_kept = quads_flat[keep]
-    nb_raw = np.stack([low.ravel(), high.ravel()], axis=1)[keep]
+
+    if not faulted.any():
+        # FAST PATH — byte-identical to v0.1.0 for matching-Z decks.
+        faces_kept = quads_flat[keep]
+        nb_raw = np.stack([low.ravel(), high.ravel()], axis=1)[keep]
+        nb = _move_minus_one_to_col1(nb_raw)
+        direction = np.ones(faces_kept.shape[0], dtype=np.int8)
+        return Faces(nodes=faces_kept, neighbours=nb, direction=direction)
+
+    # DISPATCH PATH — drop matching faces in faulted (i, j) j-stacks
+    # and concatenate with _find_faulted_j_faces output.
+    stack_faulted = faulted.any(axis=2)              # (NX, NY-1)
+    face_drop = np.zeros((nx, ny + 1, nz), dtype=bool)
+    if stack_faulted.shape[1] > 0:
+        face_drop[:, 1:ny, :] = stack_faulted[:, :, None]
+
+    keep_no_fault = keep & ~face_drop.ravel()
+    faces_kept = quads_flat[keep_no_fault]
+    nb_raw = np.stack(
+        [low.ravel(), high.ravel()], axis=1,
+    )[keep_no_fault]
     nb = _move_minus_one_to_col1(nb_raw)
     direction = np.ones(faces_kept.shape[0], dtype=np.int8)
 
-    return Faces(nodes=faces_kept, neighbours=nb, direction=direction)
+    fault_faces, _ = _find_faulted_j_faces(cube)
+
+    return Faces(
+        nodes=np.concatenate([faces_kept, fault_faces.nodes], axis=0),
+        neighbours=np.concatenate([nb, fault_faces.neighbours], axis=0),
+        direction=np.concatenate([direction, fault_faces.direction], axis=0),
+    )
 
 
 # ── combined helper ─────────────────────────────────────────────────────────

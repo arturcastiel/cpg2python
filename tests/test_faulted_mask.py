@@ -111,7 +111,10 @@ def test_find_i_faces_dispatches_on_faulted_fixture(fixtures):
 
 def test_find_j_faces_no_raise_on_faulted_fixture(fixtures):
     """j-direction is unfaulted on this fixture; find_j_faces should
-    complete normally even though the deck has an i-fault."""
+    complete normally even though the deck has an i-fault.
+    Post-PR-7: find_j_faces always dispatches (no longer raises on
+    j-faulted decks either), but this fixture has zero j-faulted
+    stacks so the matching-Z fast path runs."""
     g = read_grdecl(fixtures / "simple_faulted_2x2x2.grdecl")
     cube = from_grdecl(g)
     faces = find_j_faces(cube)
