@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added (phase 2-faults — working toward v0.2.0)
+- `cpg2unstructured.unstructured._find_faulted_i_faces` — first
+  end-to-end integration of phase 2-faults. Walks every faulted
+  i-pillar-pair stack, builds (za, zb) arrays from cube.P + cube.nodes,
+  invokes find_connections (PR-2) for the sweep-line pairing, then
+  compute_face_geometry (PR-4) for the 4-corner polygons, and returns
+  a standard Faces record (with neighbours, direction=0, nodes sorted
+  per the existing Faces convention). Stack-local (no MRST dZ trick
+  — per-stack loop is plenty fast for typical decks). **PR-5 scope
+  restrictions** that will be lifted in PR-9: (a) all-active stacks
+  only — inactive cell mid-stack raises NonMatchingZError; (b)
+  4-corner polygons only — slanted-cell fault faces with envelope
+  crossings or diamond cases raise (PR-9 will extend Faces to
+  variable-length polygons). The common case of "rigid blocks with
+  vertical Z offset" — including the simple_faulted_2x2x2 fixture
+  — is fully supported. NOT yet integrated into find_i_faces or
+  build_topology; both still raise on faulted decks (the widening
+  is PR-6). 8 unit tests in tests/test_find_faulted_i_faces.py
+  cover: 3 matching-Z fixtures return empty, simple_faulted_2x2x2
+  produces 6 fault faces (2 j-stacks × 3 connections per stack =
+  6 faces, matching the §6b worked example), neighbour-id validity,
+  sorted-corners convention, no new nodes appended (4-corner only),
+  inactive-cell-in-stack raise, and build_topology still raising
+  pre-widening. (PR-5 of phase 2-faults.)
 - `cpg2unstructured._fault_geometry.compute_face_geometry` — the
   8-position J-table polygon assembler for fault-face polygons.
   For each connection (a row of the connection table from PR-2),
