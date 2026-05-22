@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added (phase 2-faults — working toward v0.2.0)
+- `cpg2unstructured._fault_geometry.line_intersection` — XYZ
+  intersection of two line-segment families, parametrised by z.
+  Two lines, each defined by its start + end XYZ on the same pillar
+  pair (so both go pillar-1 → pillar-2; same (x, y) trajectory in
+  the vertical-pillar limit; z values differ). Solves
+  ``t = (z_B^{p1} - z_A^{p1}) / (Δz_A - Δz_B)`` and reconstructs
+  XYZ along line A at ``t``. Vectorised over leading axes. Raises
+  `ValueError` if any pair has parallel z-trajectories
+  (``|Δz_A - Δz_B| < 1e-12`` — R-3 guard from the phase 2-faults
+  study). Direct port of MRST's ``intersection`` helper
+  (``processGRDECL.m`` lines 1164-1190). 9 unit tests cover simple
+  crossings, intersection at line endpoints, beyond-endpoint
+  extrapolation, exact-z output, parallel-z raise, horizontal A
+  meets sloped B, vectorised (n, 3) shape, float32 input → float64
+  output, and a slanted-(x,y)-pillar case. (PR-3 of phase 2-faults.)
 - `cpg2unstructured._fault_connections` module — pure 1D segment-overlap
   algorithm used to pair up faulted-stack cells. Three functions:
   `overlap(xa1, xa2, xb1, xb2) -> bool` (strict interval overlap),
