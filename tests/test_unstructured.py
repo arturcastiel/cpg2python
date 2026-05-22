@@ -239,7 +239,15 @@ def test_topology_no_negative_node_ids(cube_2x2x2):
     assert (mesh.cell_corners >= 0).all()
 
 
-def test_fault_still_raises_in_build_topology():
+def test_fault_succeeds_end_to_end_in_build_topology():
+    """Post-PR-8 (phase 2-faults): build_topology no longer raises on
+    i-direction faults. The fault_simple.grdecl deck has a single
+    i-fault that find_i_faces dispatches through _find_faulted_i_faces;
+    build_topology now produces a valid UnstructuredGrid end-to-end.
+    """
     cube = from_grdecl(read_grdecl(FIXTURES / "fault_simple.grdecl"))
-    with pytest.raises(NonMatchingZError, match="v2 only"):
-        build_topology(cube)
+    grid = build_topology(cube)
+    assert grid is not None
+    # 2x2x2 all-active: 8 cells, all retained (single-corner mismatch
+    # doesn't produce zero-volume cells).
+    assert grid.n_cells == 8

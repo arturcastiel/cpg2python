@@ -139,10 +139,13 @@ def test_inactive_cell_in_fault_stack_raises(tmp_path, fixtures):
 # ── build_topology still raises (PR-5 doesn't widen build_topology) ─
 
 
-def test_build_topology_still_raises_on_faulted_fixture(fixtures):
-    """build_topology rejects faulted decks until PR-6 widening."""
+def test_build_topology_succeeds_on_faulted_fixture(fixtures):
+    """Post-PR-8: build_topology succeeds end-to-end on the i-fault
+    fixture (the build_topology guard was relaxed to only catch
+    k-direction faults)."""
     from cpg2unstructured import build_topology
     g = read_grdecl(fixtures / "simple_faulted_2x2x2.grdecl")
     cube = from_grdecl(g)
-    with pytest.raises(NonMatchingZError, match="v2 only"):
-        build_topology(cube)
+    grid = build_topology(cube)
+    assert grid is not None
+    assert grid.n_cells == 8

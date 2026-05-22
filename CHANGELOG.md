@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added (phase 2-faults — working toward v0.2.0)
+- **`build_topology` end-to-end on faulted decks** (headline of
+  phase 2-faults). The top-level i/j fault guard inside
+  `build_topology` was removed; `find_i_faces` (PR-6) and
+  `find_j_faces` (PR-7) now handle the dispatch internally, and
+  the topology builder simply consumes their unified Faces
+  output. On `simple_faulted_2x2x2.grdecl` and
+  `simple_faulted_2x2x2_j.grdecl`, `build_topology(cube)` now
+  produces a valid `UnstructuredGrid` with `n_cells == 8` and
+  the expected `cell_faces` shape — what would previously raise
+  `NonMatchingZError`. **k-direction faults still raise**:
+  the 2-pillar sweep-line algorithm of PR-2/PR-4 doesn't apply
+  to the 4-pillar geometry of k-faces. The remaining
+  `build_topology` raise is now narrowed to `_faulted_pillar_mask_k`
+  only, with a clear "k-direction fault dispatch not yet
+  implemented" message. k-fault dispatch is on the PR-9 polish
+  TODO. Five v0.1.0+PR-1 Tier A tests were updated from
+  "expect raise" to "expect success" (with `grid.n_cells == 8`
+  assertions); the renamed test names are
+  `test_build_topology_succeeds_on_*`. New test file
+  `tests/test_build_topology_faulted.py` adds 3 end-to-end
+  scenarios: build_topology on simple_faulted_2x2x2 (i-fault),
+  simple_faulted_2x2x2_j (j-fault), and a synthetic k-fault
+  fixture that still raises with the new message. (PR-8 of
+  phase 2-faults.)
 - **`find_j_faces` widened to dispatch matching-Z vs faulted inline**
   (D-2F-1, symmetric to PR-6). Adds the new `_find_faulted_j_faces`
   helper that mirrors `_find_faulted_i_faces` along the j-axis:

@@ -111,9 +111,12 @@ def test_simple_faulted_2x2x2_j_neighbour_col0_smaller(fixtures):
 # ── build_topology still raises (PR-8 will drop the guard) ─────────
 
 
-def test_build_topology_still_raises_on_j_faulted_fixture(fixtures):
+def test_build_topology_succeeds_on_j_faulted_fixture(fixtures):
+    """Post-PR-8: build_topology end-to-end on simple_faulted_2x2x2_j.
+    find_j_faces dispatches → build_topology assembles correctly."""
     from cpg2unstructured import build_topology
     g = read_grdecl(fixtures / "simple_faulted_2x2x2_j.grdecl")
     cube = from_grdecl(g)
-    with pytest.raises(NonMatchingZError, match="v2 only"):
-        build_topology(cube)
+    grid = build_topology(cube)
+    assert grid is not None
+    assert grid.n_cells == 8

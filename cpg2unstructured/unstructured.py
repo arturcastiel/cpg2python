@@ -922,18 +922,19 @@ def build_topology(cube: CornerCube) -> UnstructuredGrid:
     actnum_3d = cube.actnum_3d
     n_old = nx * ny * nz
 
-    # PR-1 of 2-faults: build_topology still rejects faulted decks
-    # at the top-level (matching prior v0.1.0 behaviour). The widening
-    # to dispatch matching vs faulted lands in PR-6/7/8.
-    # Message must contain "v2 only" — Tier A regression test
-    # tests/test_unstructured.py::test_fault_still_raises_in_build_topology
-    # asserts that substring.
-    if (_faulted_pillar_mask_i(P, actnum_3d).any()
-            or _faulted_pillar_mask_j(P, actnum_3d).any()
-            or _faulted_pillar_mask_k(P, actnum_3d).any()):
+    # Phase 2-faults · PR-8: the top-level i/j fault guard is REMOVED
+    # — find_i_faces (PR-6) and find_j_faces (PR-7) now dispatch
+    # matching vs faulted inline. k-direction faults still raise
+    # downstream in find_k_faces (k-fault dispatch deferred to a
+    # follow-up; the i/j-pair sweep-line algorithm does not directly
+    # apply to k-faces, which have 4 pillars not 2).
+    if _faulted_pillar_mask_k(P, actnum_3d).any():
+        i, j, k = map(int, np.argwhere(
+            _faulted_pillar_mask_k(P, actnum_3d),
+        )[0])
         raise NonMatchingZError(
-            "non-matching-Z grid not yet supported by build_topology "
-            "(phase 2-faults in progress — v2 only)"
+            f"non-matching-Z across k={k + 1} at (i={i}, j={j}) — "
+            "k-direction fault dispatch not yet implemented (v2 only)"
         )
 
     # Cell index lookup with boundary padding — stores original F-order
