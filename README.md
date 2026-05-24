@@ -9,6 +9,10 @@ backend for fast Dijkstra.
 PINCH non-neighbour connections (`UnstructuredGrid.nnc`), and
 disconnected-grid splitting (`UnstructuredGrid.split()`).
 **Distribution:** local editable install only — not on PyPI.
+**Main author:** Dr. Artur Castiel Reis de Souza · arturcastiel.github.io
+
+**Tutorial:** a formal end-to-end walkthrough (incl. faults, PINCH NNCs,
+and disconnected-grid splitting) lives in [`docs/TUTORIAL.md`](docs/TUTORIAL.md).
 
 ## Install
 
