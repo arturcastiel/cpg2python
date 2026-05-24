@@ -4,12 +4,12 @@
 --
 -- Z layout (vertical pillars, z 0..2):
 --   k=0 : top z=0, bottom z=1   (unit thickness)
---   k=1 : top z=1, bottom z=1   (PINCHED — zero thickness)
+--   k=1 : top z=1, bottom z=1   (PINCHED - zero thickness)
 --   k=2 : top z=1, bottom z=2   (unit thickness)
 --
 -- After pinch detection the k=1 cell is dropped; k=0 and k=2 become
--- vertically non-adjacent (a gap). PR-12 will bridge them with an NNC.
--- PR-11 of phase 2-faults — pinched-cell detection + drop.
+-- vertically non-adjacent. PR-12 will bridge them with an NNC.
+-- PR-11 of phase 2-faults - pinched-cell detection + drop.
 
 SPECGRID
   1 1 3 1 F /
@@ -20,15 +20,18 @@ COORD
   0 1 0  0 1 2
   1 1 0  1 1 2  /
 
--- ZCORN: 4 slices-of-pairs → 2*NZ = 6 k-slots, each 2*1 × 2*1 = 4 vals,
--- F-order (i fastest, then j, then k-slot).
+-- ZCORN: 2*NZ = 6 k-slots, each 2*1 x 2*1 = 4 vals, F-order
+-- (i fastest, then j, then k-slot). Two k-slots per cell layer.
 ZCORN
-  0 0 0 0      -- k=0 top  (z=0)
-  1 1 1 1      -- k=0 bot  (z=1)
-  1 1 1 1      -- k=1 top  (z=1)
-  1 1 1 1      -- k=1 bot  (z=1)  ← collapsed: top == bottom
-  1 1 1 1      -- k=2 top  (z=1)
-  2 2 2 2      -- k=2 bot  (z=2)  /
+  -- k=0:  top z=0  then  bot z=1
+  0 0 0 0
+  1 1 1 1
+  -- k=1:  top z=1  then  bot z=1   (collapsed: top == bottom)
+  1 1 1 1
+  1 1 1 1
+  -- k=2:  top z=1  then  bot z=2
+  1 1 1 1
+  2 2 2 2 /
 
 ACTNUM
   3*1 /
