@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file.
   Dr. Artur Castiel Reis de Souza.
 
 ### Changed
+- **License: MIT → GNU GPL v3.** The corner-point grid-processing
+  algorithms derive from MRST's GPLv3 `processGRDECL.m` (© SINTEF
+  Digital), so the project is relicensed to GPL v3 to honor that
+  copyleft and credit the authors. Adds `NOTICE`, a README
+  "Attribution & provenance" section, and per-module credit headers
+  on the four derived files. (`pyproject` license + classifier updated.)
 - **CI** opts JavaScript actions into the Node 24 runtime
   (`FORCE_JAVASCRIPT_ACTIONS_TO_NODE24`) and bumps `actions/checkout@v5`,
   ahead of the 2026-06 Node-20 removal.

@@ -1,3 +1,6 @@
+# Derived from MRST's processGRDECL.m computeFaceGeometry / intersection
+# (corner-point grid processing), (C) SINTEF Digital, GNU GPL v3.
+# See README + NOTICE.
 """Fault-face geometry helpers (PR-3+ of phase 2-faults).
 
 Pure geometric primitives:

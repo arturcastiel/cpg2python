@@ -14,6 +14,33 @@ disconnected-grid splitting (`UnstructuredGrid.split()`).
 **Tutorial:** a formal end-to-end walkthrough (incl. faults, PINCH NNCs,
 and disconnected-grid splitting) lives in [`docs/TUTORIAL.md`](docs/TUTORIAL.md).
 
+## Attribution & provenance
+
+This library stands on the shoulders of **MRST — the MATLAB Reservoir
+Simulation Toolbox**, by **SINTEF Digital**. The corner-point grid
+processing in MRST's `processGRDECL.m` is the foundation from which this
+project's grid-topology algorithms were derived. We gratefully acknowledge
+MRST and its authors — please see and cite MRST at
+<https://www.sintef.no/projectweb/mrst/>.
+
+MRST is licensed under the **GNU GPL v3**. To honor that license and the
+authors' work, **this project is released under the GNU GPL v3** as well
+(see [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE)).
+
+Routines we based our implementation on, and where they live here:
+
+| MRST `processGRDECL.m` routine | cpg2unstructured |
+|---|---|
+| `findFaces` (matching-Z + fault handover) | `unstructured.find_i/j/k_faces`, `build_topology` |
+| `findFaults` (faulted pillar pairs) | `unstructured._faulted_pillar_mask_*` |
+| `findConnections` (1-D segment pairing) | `_fault_connections` |
+| `computeFaceGeometry`, `intersection` | `_fault_geometry` |
+| `processPINCH` (pinch-out → NNC) | pinch detection + `UnstructuredGrid.nnc` |
+| `SplitDisconnected` / `removeCells` | `UnstructuredGrid.component` / `split()` |
+
+Out of respect for MRST's copyleft, the four modules above carry a header
+crediting `processGRDECL.m`, and the project ships GPL v3 — see `NOTICE`.
+
 ## Install
 
 ```bash

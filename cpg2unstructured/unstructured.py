@@ -1,3 +1,6 @@
+# Portions of this module are derived from MRST's processGRDECL.m
+# (corner-point grid processing), (C) SINTEF Digital, GNU GPL v3.
+# See the README "Attribution & provenance" section and the NOTICE file.
 """Unstructured-mesh face finders + topology builder for matching-Z CPG.
 
 PR-6 covers i-faces + j-faces (regular, matching-Z).

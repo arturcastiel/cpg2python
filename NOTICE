@@ -1,0 +1,37 @@
+cpg2unstructured
+Copyright (C) 2026 Dr. Artur Castiel Reis de Souza
+
+This program is free software: you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the
+Free Software Foundation, either version 3 of the License, or (at your
+option) any later version. See the LICENSE file for the full text.
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+────────────────────────────────────────────────────────────────────
+Attribution
+────────────────────────────────────────────────────────────────────
+This project's corner-point grid-processing algorithms were derived from
+MRST — the MATLAB Reservoir Simulation Toolbox — specifically its
+`processGRDECL.m` corner-point grid builder. We gratefully acknowledge
+MRST and its authors.
+
+    MRST is Copyright (C) SINTEF Digital and is licensed under the
+    GNU General Public License v3.
+    https://www.sintef.no/projectweb/mrst/
+
+Routines from `processGRDECL.m` that this implementation is based on:
+
+    findFaces        -> cpg2unstructured/unstructured.py
+                        (find_i_faces / find_j_faces / find_k_faces,
+                         build_topology)
+    findFaults       -> cpg2unstructured/unstructured.py
+                        (_faulted_pillar_mask_i/j/k)
+    findConnections  -> cpg2unstructured/_fault_connections.py
+    computeFaceGeometry,
+    intersection     -> cpg2unstructured/_fault_geometry.py
+    processPINCH     -> pinch detection + UnstructuredGrid.nnc
+    SplitDisconnected,
+    removeCells      -> UnstructuredGrid.component / UnstructuredGrid.split()
