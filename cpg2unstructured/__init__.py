@@ -36,7 +36,7 @@ from cpg2unstructured.unstructured import (
     find_k_faces,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "__version__",

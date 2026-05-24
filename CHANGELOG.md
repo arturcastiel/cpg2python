@@ -4,7 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-### Added (phase 2-faults — working toward v0.2.0)
+## [0.2.0] - 2026-05-24
+
+Phase 2-faults: non-matching-Z (faulted) CPG grids, PINCH NNCs, and
+disconnected-grid splitting — "transform *any* CPG grid into an
+unstructured grid representation".
+
+### Added (phase 2-faults)
 - **Disconnected-grid splitting — `UnstructuredGrid.split()`.** Returns
   one independent `UnstructuredGrid` per connected component (in label
   order); a single-component grid returns `[self]`. Node ids stay global
