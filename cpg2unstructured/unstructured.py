@@ -795,6 +795,11 @@ class UnstructuredGrid:
     # connected without sharing a geometric face. Populated for cells
     # bridged across a pinched-out layer (PR-12); empty (0, 2) otherwise.
     nnc: np.ndarray = field(default_factory=lambda: np.empty((0, 2), dtype=np.int64))
+    # (Ncells,) int64 — connected-component label per cell over the face
+    # + NNC adjacency. 0-based, assigned in order of first cell id, so a
+    # single-component grid is all zeros. Use ``split()`` to materialise
+    # the components as independent grids (PR-14).
+    component: np.ndarray = field(default_factory=lambda: np.empty((0,), dtype=np.int64))
     props: dict[str, np.ndarray] = field(default_factory=dict)
     _index_map: "IndexMap | None" = field(default=None, repr=False, compare=False)
 
@@ -938,6 +943,48 @@ def _pinch_nncs(
     if not pairs:
         return np.empty((0, 2), dtype=np.int64)
     return np.array(sorted(pairs), dtype=np.int64)
+
+
+def _connected_components(
+    n_cells: int, neighbours: np.ndarray, nnc: np.ndarray,
+) -> np.ndarray:
+    """0-based component label per cell over the face + NNC adjacency.
+
+    Two cells are connected if they share an inner face or an NNC. Labels
+    are assigned in order of first cell id, so cell 0 is always in
+    component 0 and a fully-connected grid is all zeros.
+    """
+    parent = np.arange(n_cells, dtype=np.int64)
+
+    def find(x: int) -> int:
+        root = x
+        while parent[root] != root:
+            root = int(parent[root])
+        while parent[x] != root:
+            parent[x], x = root, int(parent[x])
+        return root
+
+    def union(a: int, b: int) -> None:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[max(ra, rb)] = min(ra, rb)
+
+    if neighbours.size:
+        for a, b in neighbours[neighbours[:, 1] != -1]:
+            union(int(a), int(b))
+    for a, b in nnc:
+        union(int(a), int(b))
+
+    out = np.empty(n_cells, dtype=np.int64)
+    label_of: dict[int, int] = {}
+    nxt = 0
+    for i in range(n_cells):
+        r = find(i)
+        if r not in label_of:
+            label_of[r] = nxt
+            nxt += 1
+        out[i] = label_of[r]
+    return out
 
 
 def build_topology(cube: CornerCube) -> UnstructuredGrid:
@@ -1117,6 +1164,9 @@ def build_topology(cube: CornerCube) -> UnstructuredGrid:
     else:
         nnc = np.empty((0, 2), dtype=np.int64)
 
+    # PR-13 — connected-component labels over the face + NNC adjacency.
+    component = _connected_components(n_new, nb_final, nnc)
+
     return UnstructuredGrid(
         nodes=cube.nodes,
         faces=final_faces,
@@ -1125,4 +1175,5 @@ def build_topology(cube: CornerCube) -> UnstructuredGrid:
         original_ijk=original_ijk,
         cart_dims=cube.cart_dims,
         nnc=nnc,
+        component=component,
     )
