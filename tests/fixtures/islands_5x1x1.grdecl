@@ -1,0 +1,37 @@
+-- islands_5x1x1.grdecl
+-- A row of 5 unit cells with the middle one (i=2) switched off, so the
+-- grid splits into TWO disconnected islands:
+--   island A : i=0, i=1   (share an i-face)
+--   island B : i=3, i=4   (share an i-face)
+-- Nothing connects A and B (no shared face, no NNC) -> 2 components.
+-- PR-14 of phase 2-faults - disconnected-grid split() fixture.
+
+SPECGRID
+  5 1 1 1 F /
+
+COORD
+  0 0 0  0 0 1
+  1 0 0  1 0 1
+  2 0 0  2 0 1
+  3 0 0  3 0 1
+  4 0 0  4 0 1
+  5 0 0  5 0 1
+  0 1 0  0 1 1
+  1 1 0  1 1 1
+  2 1 0  2 1 1
+  3 1 0  3 1 1
+  4 1 0  4 1 1
+  5 1 0  5 1 1  /
+
+-- ZCORN: 2 k-slots, each 2*1 j-slots x 2*5 i-slots = 20 vals. Flat
+-- unit cells: top slice all z=0, bottom slice all z=1.
+ZCORN
+  -- k=0 top (z=0)
+  0 0 0 0 0 0 0 0 0 0
+  0 0 0 0 0 0 0 0 0 0
+  -- k=0 bot (z=1)
+  1 1 1 1 1 1 1 1 1 1
+  1 1 1 1 1 1 1 1 1 1 /
+
+ACTNUM
+  1 1 0 1 1 /

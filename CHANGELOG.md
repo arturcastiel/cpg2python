@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added (phase 2-faults — working toward v0.2.0)
+- **Disconnected-grid splitting — `UnstructuredGrid.split()`.** Returns
+  one independent `UnstructuredGrid` per connected component (in label
+  order); a single-component grid returns `[self]`. Node ids stay global
+  (the `nodes` array is shared); cells, faces, `nnc` and `props` are
+  re-indexed per sub-grid. New `islands_5x1x1.grdecl` fixture (two
+  disconnected blocks). Per **ADR-2F-4**; completes Wave 7. (PR-14.)
 - **Connected-component labels — `UnstructuredGrid.component`.** A new
   `component: (Ncells,) int64` field labels each cell by connected
   component over the inner-face + NNC adjacency (0-based, in order of
