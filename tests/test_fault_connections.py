@@ -3,7 +3,7 @@
 Pure unit tests with hand-crafted z-list inputs — no GRDECL parsing,
 no geometry. Covers all three branches of ``do_intersect`` (per-pillar
 overlap and ``le fix speciale`` diamond crossing), pinch guards, and
-the worked example from ``01-study.md`` §6b.
+a hand-worked overlap example.
 """
 from __future__ import annotations
 

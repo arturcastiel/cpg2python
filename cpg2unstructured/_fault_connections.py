@@ -7,9 +7,8 @@ Given the z-values along a faulted pillar pair (one for each side of
 the fault), pair up cells whose vertical extents overlap.
 
 Direct port of MRST's ``findConnections`` / ``doIntersect`` /
-``overlap`` from ``processGRDECL.m`` (DARSim-vendored copy). See
-``my-axon/dev-projects/cpg-to-unstructure/phases/2-faults/01-study.md``
-§§6.2-6.5 for the full algorithmic narrative.
+``overlap`` from ``processGRDECL.m``. See the README
+"Attribution & provenance" section for the algorithmic provenance.
 
 NOT public API — ``cpg2unstructured.unstructured`` consumes these
 internally when integration lands in PR-5+ of phase 2-faults.
