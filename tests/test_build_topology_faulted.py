@@ -57,7 +57,9 @@ def test_build_topology_on_simple_faulted_3x3x2(fixtures):
     Exercises the find_i_faces dispatch on a multi-j-row grid
     (the 2x2x2 fixtures only have 2 j-rows; this has 3).
 
-    The fault plane spans 3 j-rows × 2 k-layers = 6 faulted i-faces."""
+    The fault plane spans 3 j-rows; the +0.6 offset makes the upper
+    i=1 cell straddle both i=2 cells, so each stack yields 3 conns
+    → 9 faulted i-faces."""
     g = read_grdecl(fixtures / "simple_faulted_3x3x2.grdecl")
     cube = from_grdecl(g)
     grid = build_topology(cube)
@@ -74,19 +76,22 @@ def test_simple_faulted_3x3x2_i_face_dispatch_count(fixtures):
 
         i-plane 0  (boundary)        : 3 j × 2 k = 6
         i-plane 1  (matching, i=0..1): 3 j × 2 k = 6
-        i-plane 2  (FAULTED, i=1..2) : 3 j-stacks × 2 conns = 6
+        i-plane 2  (FAULTED, i=1..2) : 3 j-stacks × 3 conns = 9
         i-plane 3  (boundary)        : 3 j × 2 k = 6
 
-        Total i-faces                : 24
+        Total i-faces                : 27
+
+        (the +0.6 offset makes the upper i=1 cell overlap BOTH i=2
+         cells, so each faulted stack yields 3 connections, not 2.)
     """
     from cpg2unstructured.unstructured import find_i_faces
     g = read_grdecl(fixtures / "simple_faulted_3x3x2.grdecl")
     cube = from_grdecl(g)
     faces = find_i_faces(cube)
-    assert faces.nodes.shape == (24, 4)
+    assert faces.nodes.shape == (27, 4)
     # All direction=0 (i-faces)
     np.testing.assert_array_equal(
-        faces.direction, np.zeros(24, dtype=np.int8),
+        faces.direction, np.zeros(27, dtype=np.int8),
     )
     # All neighbours in valid range
     nbs = faces.neighbours

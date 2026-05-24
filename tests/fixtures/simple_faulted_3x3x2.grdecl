@@ -7,7 +7,9 @@
 --   i =  2      → top z = k + 0.6    (+0.6 Z offset across the fault)
 --
 -- Fault plane: between i=1 and i=2 columns, across all 3 j-rows.
--- 3 faulted i-stacks → 6 fault faces (3 j-rows × 2 k-layers).
+-- The +0.6 offset makes the upper cell on the i=1 side straddle
+-- both cells on the i=2 side, so each faulted pillar stack yields
+-- 3 connections (not 2): 3 j-rows × 3 conns = 9 fault faces.
 --
 -- This is the regression fixture for PR-9 of phase 2-faults — it
 -- exercises the find_i_faces dispatch on a multi-row grid (the

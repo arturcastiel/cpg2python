@@ -8,15 +8,16 @@ All notable changes to this project will be documented in this file.
 - **Regression fixture + 3 tests for the 3×3×2 multi-column i-fault.**
   Adds `tests/fixtures/simple_faulted_3x3x2.grdecl` — a 3×3×2 deck
   with a +0.6 Z offset on the i=2 column, faulted across all 3
-  j-rows × 2 k-layers (6 faulted i-faces). This exercises the
+  j-rows. The offset makes the upper i=1 cell straddle both i=2
+  cells → 3 connections per stack → 9 faulted i-faces. This exercises the
   `find_i_faces` dispatch on a multi-j-row grid (the 2×2×2 fixtures
   only have 2 j-rows). 3 new tests in
   `tests/test_build_topology_faulted.py`:
     · `test_build_topology_on_simple_faulted_3x3x2` — end-to-end:
       `build_topology` returns 18 cells.
     · `test_simple_faulted_3x3x2_i_face_dispatch_count` — verifies
-      the dispatch produces 24 i-faces (6 boundary + 6 matching
-      inner + 6 fault inner + 6 boundary).
+      the dispatch produces 27 i-faces (6 boundary + 6 matching
+      inner + 9 fault inner + 6 boundary).
     · `test_simple_faulted_3x3x2_neighbour_convention` — confirms
       `_move_minus_one_to_col1` is preserved on the larger fixture.
   Pins the v0.2.0 capability so a future change can't quietly break
