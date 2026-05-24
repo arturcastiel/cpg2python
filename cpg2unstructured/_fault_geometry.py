@@ -151,9 +151,7 @@ def compute_face_geometry(
     Notes
     -----
     Direct port of MRST's ``computeFaceGeometry`` (``processGRDECL.m``
-    lines 853-1160). See
-    ``my-axon/dev-projects/cpg-to-unstructure/phases/2-faults/01-study.md``
-    §6.6 for the algorithmic narrative.
+    lines 853-1160). See the README "Attribution & provenance" section.
 
     The 8-position J-table layout (clockwise, normal A→B):
 
