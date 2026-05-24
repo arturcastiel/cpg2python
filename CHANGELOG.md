@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **Formal tutorial** `docs/TUTORIAL.md` — end-to-end walkthrough of the
+  pipeline plus the v0.2.0 capabilities (faulted grids, PINCH NNCs,
+  disconnected-grid `split()`). Linked from the README; main author
+  Dr. Artur Castiel Reis de Souza.
+
+### Changed
+- **CI** opts JavaScript actions into the Node 24 runtime
+  (`FORCE_JAVASCRIPT_ACTIONS_TO_NODE24`) and bumps `actions/checkout@v5`,
+  ahead of the 2026-06 Node-20 removal.
+
 ## [0.2.0] - 2026-05-24
 
 Phase 2-faults: non-matching-Z (faulted) CPG grids, PINCH NNCs, and

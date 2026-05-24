@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
 
+# Opt all JavaScript actions into the Node 24 runtime ahead of the
+# 2026-06 forced migration — silences the Node-20 deprecation warning
+# without depending on each action publishing a new major tag.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   test:
     name: pytest (py${{ matrix.python-version }})
@@ -15,7 +21,7 @@ jobs:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
