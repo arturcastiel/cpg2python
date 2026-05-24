@@ -835,6 +835,66 @@ class UnstructuredGrid:
             )
         return self._index_map  # type: ignore[return-value]
 
+    def split(self) -> "list[UnstructuredGrid]":
+        """Materialise each connected component as an independent grid.
+
+        Returns one :class:`UnstructuredGrid` per ``component`` label, in
+        label order. A single-component grid returns ``[self]`` unchanged.
+        Node ids are kept global (the shared ``nodes`` array is reused), so
+        only cell ids, face ids, ``nnc`` and ``props`` are re-indexed.
+        """
+        n_comp = int(self.component.max()) + 1 if self.component.size else 0
+        if n_comp <= 1:
+            return [self]
+
+        nb = self.faces.neighbours
+        n_faces = self.faces.nodes.shape[0]
+        out: list[UnstructuredGrid] = []
+        for cid in range(n_comp):
+            cell_mask = self.component == cid
+            cell_remap = np.full(self.n_cells, -1, dtype=np.int64)
+            cell_remap[cell_mask] = np.arange(int(cell_mask.sum()))
+
+            # A face belongs to the component if either neighbour cell does.
+            in0 = cell_mask[nb[:, 0]]                 # col 0 is always a real id
+            in1 = np.zeros(nb.shape[0], dtype=bool)
+            v1 = nb[:, 1] != -1
+            in1[v1] = cell_mask[nb[v1, 1]]
+            face_mask = in0 | in1
+            face_remap = np.full(n_faces, -1, dtype=np.int64)
+            face_remap[face_mask] = np.arange(int(face_mask.sum()))
+
+            sub_nb = nb[face_mask].copy()
+            for col in (0, 1):
+                m = sub_nb[:, col] != -1
+                sub_nb[m, col] = cell_remap[sub_nb[m, col]]
+            sub_nb = _move_minus_one_to_col1(sub_nb)
+
+            sub_faces = Faces(
+                nodes=self.faces.nodes[face_mask],
+                neighbours=sub_nb,
+                direction=self.faces.direction[face_mask],
+            )
+            if self.nnc.size:
+                nm = cell_mask[self.nnc[:, 0]] & cell_mask[self.nnc[:, 1]]
+                sub_nnc = cell_remap[self.nnc[nm]]
+            else:
+                sub_nnc = np.empty((0, 2), dtype=np.int64)
+
+            n_sub = int(cell_mask.sum())
+            out.append(UnstructuredGrid(
+                nodes=self.nodes,
+                faces=sub_faces,
+                cell_faces=face_remap[self.cell_faces[cell_mask]],
+                cell_corners=self.cell_corners[cell_mask],
+                original_ijk=self.original_ijk[cell_mask],
+                cart_dims=self.cart_dims,
+                nnc=sub_nnc,
+                component=np.zeros(n_sub, dtype=np.int64),
+                props={k: v[cell_mask] for k, v in self.props.items()},
+            ))
+        return out
+
 
 # Backward-compat type alias: existing code (e.g. cpg2unstructured.graph)
 # imports `_TopoMesh` for type hints. The class was renamed in PR-12
