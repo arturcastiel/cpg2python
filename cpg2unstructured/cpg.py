@@ -1,3 +1,6 @@
+# Portions of this module are derived from MRST's processGRDECL.m
+# (corner-point grid processing), (C) SINTEF Digital, GNU GPL v3.
+# See the README "Attribution & provenance" section and the NOTICE file.
 """CPG geometry assembly: Grdecl → corner cube → unique nodes + P map.
 
 PR-5 scope: `from_grdecl` returns a `CornerCube` carrying

@@ -173,11 +173,12 @@ use `scipy.sparse` for large grids.
 
 ## 9. Visual debugging
 
-Rendering lives in a separate side folder (personal tooling, never
-packaged): `/mnt/c/projects/viz-cpg2unstructured`. Headless PNG export:
+Rendering lives in a separate, repo-external side folder (personal
+tooling, never packaged) — a sibling `viz-cpg2unstructured/` checkout.
+Headless PNG export:
 
 ```bash
-bash /mnt/c/projects/viz-cpg2unstructured/export-pngs.sh tests/fixtures/pinched_1x1x3.grdecl
+bash ../viz-cpg2unstructured/export-pngs.sh tests/fixtures/pinched_1x1x3.grdecl
 ```
 
 The side-by-side render draws raw CPG vs the unstructured grid, the

@@ -1,3 +1,5 @@
+# Derived from MRST's processGRDECL.m findConnections (corner-point grid
+# processing), (C) SINTEF Digital, GNU GPL v3. See README + NOTICE.
 """Fault-stack connection sweeping (PR-2 of phase 2-faults).
 
 Pure 1D segment-overlap algorithm. No geometry, no node coordinates.
