@@ -55,6 +55,26 @@ def _actnum_3d(g: Grdecl) -> np.ndarray:
     return g.actnum.reshape(nz, ny, nx).transpose(2, 1, 0).astype(bool).copy()
 
 
+def _pinched_cell_mask(g: Grdecl, tol: float = 0.0) -> np.ndarray:
+    """(NX, NY, NZ) bool — True where a cell is pinched out.
+
+    A cell is pinched (collapsed) when its vertical thickness is ≤ ``tol``
+    on *all four* pillars, i.e. the thickest corner is still ≤ tol. Such
+    zero-height cells carry no volume and are dropped from the active set
+    (MRST `processGRDECL` removes pinched cells; PR-12 then bridges the
+    cells above and below with an NNC). With the default ``tol=0.0`` only
+    exactly-collapsed cells are caught, so ordinary decks are untouched.
+    """
+    nx, ny, nz = g.cart_dims
+    zc = _zcorn_3d(g)                       # (2*NX, 2*NY, 2*NZ)
+    top = zc[:, :, 0::2]                    # k-slots 2k  → (2*NX, 2*NY, NZ)
+    bot = zc[:, :, 1::2]                    # k-slots 2k+1
+    thick = bot - top                       # per corner-slot thickness
+    # collapse the 2×2 (i, j) corner block per cell → max corner thickness
+    thick_cell = thick.reshape(nx, 2, ny, 2, nz).max(axis=(1, 3))
+    return thick_cell <= tol
+
+
 def _assemble_corner_xyz(g: Grdecl) -> np.ndarray:
     """Build (2*NX, 2*NY, 2*NZ, 3) of XYZ for every corner-cube slot.
 
@@ -107,10 +127,18 @@ def _mask_inactive_corners(xyz: np.ndarray, actnum_3d: np.ndarray) -> np.ndarray
     return out
 
 
-def from_grdecl(g: Grdecl) -> CornerCube:
-    """Build the unique-node corner cube from a parsed `Grdecl`."""
+def from_grdecl(g: Grdecl, pinch_tol: float = 0.0) -> CornerCube:
+    """Build the unique-node corner cube from a parsed `Grdecl`.
+
+    Cells whose vertical thickness is ≤ ``pinch_tol`` on all pillars are
+    pinched out (collapsed) and dropped from the active set — see
+    `_pinched_cell_mask`. ``pinch_tol=0.0`` (default) drops only
+    exactly-collapsed cells, leaving ordinary decks unchanged.
+    """
     nx, ny, nz = g.cart_dims
     actnum_3d = _actnum_3d(g)
+    # Drop pinched-out (zero-thickness) cells, treating them as inactive.
+    actnum_3d = actnum_3d & ~_pinched_cell_mask(g, tol=pinch_tol)
 
     xyz = _assemble_corner_xyz(g)
     masked = _mask_inactive_corners(xyz, actnum_3d)
