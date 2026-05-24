@@ -1,0 +1,31 @@
+-- hole_1x1x3.grdecl
+-- Single column, 3 unit-thickness k-layers, middle layer ACTNUM=0.
+-- This is a GENUINE hole, not a pinch: the k=1 cell has full unit
+-- thickness but is switched off by ACTNUM. k=0 and k=2 are therefore
+-- truly separated (z=1..2 is empty) and must NOT be NNC-bridged.
+-- Contrast with pinched_1x1x3.grdecl (zero thickness -> bridged).
+-- PR-12 of phase 2-faults - pinch-vs-hole distinction.
+
+SPECGRID
+  1 1 3 1 F /
+
+COORD
+  0 0 0  0 0 3
+  1 0 0  1 0 3
+  0 1 0  0 1 3
+  1 1 0  1 1 3  /
+
+-- ZCORN: 6 k-slots, 4 vals each. Unit thickness throughout.
+ZCORN
+  -- k=0:  top z=0  then  bot z=1
+  0 0 0 0
+  1 1 1 1
+  -- k=1:  top z=1  then  bot z=2   (full thickness, but ACTNUM=0)
+  1 1 1 1
+  2 2 2 2
+  -- k=2:  top z=2  then  bot z=3
+  2 2 2 2
+  3 3 3 3 /
+
+ACTNUM
+  1 0 1 /

@@ -64,3 +64,32 @@ def test_pinch_tol_threshold(fixtures):
     # Unit cells: tol=0 catches nothing; tol≥1 would catch everything.
     assert not _pinched_cell_mask(g, tol=0.0).any()
     assert _pinched_cell_mask(g, tol=1.0).all()
+
+
+# ── PR-12: NNCs bridge cells across a pinched-out layer ─────────────
+
+
+def test_pinch_creates_nnc(fixtures):
+    g = read_grdecl(fixtures / "pinched_1x1x3.grdecl")
+    grid = build_topology(from_grdecl(g))
+    assert grid.nnc.shape == (1, 2)
+    # The NNC bridges the two survivors (k=0 and k=2).
+    a, b = grid.nnc[0]
+    ijk_a = tuple(grid.original_ijk[a].tolist())
+    ijk_b = tuple(grid.original_ijk[b].tolist())
+    assert {ijk_a, ijk_b} == {(0, 0, 0), (0, 0, 2)}
+
+
+def test_no_pinch_means_no_nnc(fixtures):
+    g = read_grdecl(fixtures / "simple_2x2x2.grdecl")
+    grid = build_topology(from_grdecl(g))
+    assert grid.nnc.shape == (0, 2)
+
+
+def test_genuine_hole_is_not_bridged(fixtures):
+    """A full-thickness ACTNUM=0 cell is a real gap, not a pinch —
+    the cells above/below it must NOT be NNC-connected."""
+    g = read_grdecl(fixtures / "hole_1x1x3.grdecl")
+    grid = build_topology(from_grdecl(g))
+    assert grid.n_cells == 2           # k=1 switched off
+    assert grid.nnc.shape == (0, 2)    # but NOT bridged
