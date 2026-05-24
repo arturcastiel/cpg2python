@@ -5,8 +5,9 @@ Lightweight Python library: read Eclipse CPG (corner-point geometry)
 shortest-path algorithms. NumPy-only by default; optional `scipy.sparse`
 backend for fast Dijkstra.
 
-**Status:** v0.1.0 — alpha. Matching-Z grids only (faulted geometry
-deferred to v2).
+**Status:** v0.2.0 — alpha. Handles faulted (non-matching-Z) grids,
+PINCH non-neighbour connections (`UnstructuredGrid.nnc`), and
+disconnected-grid splitting (`UnstructuredGrid.split()`).
 **Distribution:** local editable install only — not on PyPI.
 
 ## Install
