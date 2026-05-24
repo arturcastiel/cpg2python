@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added (phase 2-faults — working toward v0.2.0)
+- **Connected-component labels — `UnstructuredGrid.component`.** A new
+  `component: (Ncells,) int64` field labels each cell by connected
+  component over the inner-face + NNC adjacency (0-based, in order of
+  first cell id; all zeros for a single-component grid). NNC-bridged
+  pinch survivors stay one component; a genuine ACTNUM=0 gap splits the
+  column. Per **ADR-2F-4**; PR-14 adds `split()`. (PR-13.)
 - **PINCH NNCs — `UnstructuredGrid.nnc`.** A new `nnc: (M,2) int64`
   field holds non-neighbour connections (cell-id pairs with no shared
   geometric face). `build_topology` now bridges the cells above and
