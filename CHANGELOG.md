@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added (phase 2-faults — working toward v0.2.0)
+- **PINCH detection — pinched-out cells are dropped.** `from_grdecl`
+  now folds zero-thickness (collapsed) cells out of the active set via
+  `cpg._pinched_cell_mask(g, tol)`: a cell is pinched when its vertical
+  thickness is ≤ `pinch_tol` on all four pillars. New `pinch_tol`
+  parameter on `from_grdecl` (default `0.0` → only exactly-collapsed
+  cells; ordinary decks unchanged). New fixture `pinched_1x1x3.grdecl`
+  (middle layer collapsed) + `tests/test_pinch.py`. PR-12 will bridge
+  the cells above/below a pinch with an NNC. (PR-11 of phase 2-faults.)
 - **j-fault regression: `simple_faulted_3x3x2_jfault.grdecl` + 2 tests.**
   The j-direction analogue of PR-9's i-fault fixture — a 3×3×2 deck
   with a +0.6 Z offset on the j=2 row, faulted across all 3 i-columns.
