@@ -7,15 +7,17 @@
 -- (2,1), (1,2), (2,2) at k_slot=3 — concretely positions where
 -- i_slot ∈ {1,2,3} AND j_slot ∈ {1,2,3}.
 --
--- Effect on cells:
---   cell (1,1,1)      4 top + 4 bot corners all at z=1, at 4 pillars
---                      → 4 of 6 faces have only 2 unique nodes
---                      → dropped as zero-volume.
---   cells (0,0,1), (0,1,1), (1,0,1)   ONE top corner pulled to z=1
---                      → each is a "wedge" with 7 unique corners,
---                        but no face has < 3 unique nodes
---                      → kept (still valid 3D topology).
--- Net: 7 active+real cells after build_topology.
+-- Effect on cells (per-face uniqueness rule, D-PR7-8):
+--   cell (1,1,1)            fully collapsed — 4 faces have only 2 unique
+--                            nodes → dropped as zero-volume.
+--   cells (0,1,1), (1,0,1)  share TWO pillars with (1,1,1); one face
+--                            collapses to 2 unique nodes → dropped.
+--   cell (0,0,1)            shares ONE pillar (1,1) only → wedge whose
+--                            worst face still has 3 unique → KEPT.
+-- Net: 8 − 3 = 5 active+real cells after build_topology.
+-- (See tests/test_unstructured.py::test_pinchout_drops_zero_volume_cell.
+--  An earlier "7 cells" note here was geometrically naive — corrected
+--  2026-05-24 to match the actual per-face rule.)
 
 SPECGRID
   2 2 2 1 F /
