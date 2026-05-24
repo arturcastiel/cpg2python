@@ -1,0 +1,59 @@
+-- simple_faulted_3x3x2_jfault.grdecl
+-- 3x3x2 cartesian deck with a multi-column j-direction fault.
+-- All cells active. Vertical pillars from z=0 to z=3.
+--
+-- Z layout per j-row:
+--   j ∈ {0, 1}  → top z = k          (flat unit cubes)
+--   j =  2      → top z = k + 0.6    (+0.6 Z offset across the fault)
+--
+-- Fault plane: between j=1 and j=2 rows, across all 3 i-columns.
+-- The +0.6 offset makes the upper cell on the j=1 side straddle
+-- both cells on the j=2 side, so each faulted pillar stack yields
+-- 3 connections (not 2): 3 i-cols × 3 conns = 9 fault j-faces.
+--
+-- This is the j-direction analogue of simple_faulted_3x3x2.grdecl
+-- (PR-9, i-fault). PR-10 of phase 2-faults — exercises the
+-- find_j_faces dispatch on a multi-column grid.
+
+SPECGRID
+  3 3 2 1 F /
+
+COORD
+  0 0 0  0 0 3
+  1 0 0  1 0 3
+  2 0 0  2 0 3
+  3 0 0  3 0 3
+  0 1 0  0 1 3
+  1 1 0  1 1 3
+  2 1 0  2 1 3
+  3 1 0  3 1 3
+  0 2 0  0 2 3
+  1 2 0  1 2 3
+  2 2 0  2 2 3
+  3 2 0  3 2 3
+  0 3 0  0 3 3
+  1 3 0  1 3 3
+  2 3 0  2 3 3
+  3 3 0  3 3 3  /
+
+-- ZCORN: 4 slices × (2*3 i-slots × 2*3 j-slots) = 4 × 36, F-order
+-- (i fastest, then j, then k-slot). Per slice the 6 j-slot-rows are
+-- written as 2 lines of 3 groups-of-6. The +0.6 offset lands on the
+-- last two j-slot-rows (j=2 cell row → slots 4,5), all i.
+
+ZCORN
+  -- slice 0  (top of k=0 cells)
+  0   0   0   0   0   0      0   0   0   0   0   0      0   0   0   0   0   0
+  0   0   0   0   0   0      0.6 0.6 0.6 0.6 0.6 0.6    0.6 0.6 0.6 0.6 0.6 0.6
+  -- slice 1  (bot of k=0 cells)
+  1   1   1   1   1   1      1   1   1   1   1   1      1   1   1   1   1   1
+  1   1   1   1   1   1      1.6 1.6 1.6 1.6 1.6 1.6    1.6 1.6 1.6 1.6 1.6 1.6
+  -- slice 2  (top of k=1 cells) — matches slice 1 → no k-fault
+  1   1   1   1   1   1      1   1   1   1   1   1      1   1   1   1   1   1
+  1   1   1   1   1   1      1.6 1.6 1.6 1.6 1.6 1.6    1.6 1.6 1.6 1.6 1.6 1.6
+  -- slice 3  (bot of k=1 cells)
+  2   2   2   2   2   2      2   2   2   2   2   2      2   2   2   2   2   2
+  2   2   2   2   2   2      2.6 2.6 2.6 2.6 2.6 2.6    2.6 2.6 2.6 2.6 2.6 2.6  /
+
+ACTNUM
+  18*1 /

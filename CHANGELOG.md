@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added (phase 2-faults — working toward v0.2.0)
+- **j-fault regression: `simple_faulted_3x3x2_jfault.grdecl` + 2 tests.**
+  The j-direction analogue of PR-9's i-fault fixture — a 3×3×2 deck
+  with a +0.6 Z offset on the j=2 row, faulted across all 3 i-columns.
+  Exercises `find_j_faces` dispatch on a multi-column grid (27 j-faces:
+  6 boundary + 6 matching + 9 fault + 6 boundary) and `build_topology`
+  end-to-end (18 cells). Symmetric pin to the PR-9 i-fault check.
+  (PR-10 of phase 2-faults.)
 - **Regression fixture + 3 tests for the 3×3×2 multi-column i-fault.**
   Adds `tests/fixtures/simple_faulted_3x3x2.grdecl` — a 3×3×2 deck
   with a +0.6 Z offset on the i=2 column, faulted across all 3
