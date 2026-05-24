@@ -137,3 +137,48 @@ def test_build_topology_raises_on_k_fault(tmp_path, fixtures):
     cube = from_grdecl(g)
     with pytest.raises(NonMatchingZError, match="k-direction"):
         build_topology(cube)
+
+
+# ── PR-10 regression: 3x3x2 multi-column j-fault (mirror of PR-9) ───
+
+
+def test_build_topology_on_simple_faulted_3x3x2_jfault(fixtures):
+    """3x3x2 multi-column j-fault: +0.6 Z offset on the j=2 row.
+    The j-direction analogue of the PR-9 i-fault fixture — exercises
+    find_j_faces dispatch on a multi-column grid (3 i-columns)."""
+    g = read_grdecl(fixtures / "simple_faulted_3x3x2_jfault.grdecl")
+    cube = from_grdecl(g)
+    grid = build_topology(cube)
+    assert isinstance(grid, UnstructuredGrid)
+    assert grid.n_cells == 18         # all-active 3x3x2
+    assert grid.cell_faces.shape == (18, 6)
+    assert grid.faces.nodes.shape[1] == 4
+    assert grid.faces.neighbours.shape[1] == 2
+
+
+def test_simple_faulted_3x3x2_jfault_j_face_dispatch_count(fixtures):
+    """find_j_faces on the 3x3x2 j-fault deck — symmetric to PR-9:
+
+        j-plane 0  (boundary)        : 3 i × 2 k = 6
+        j-plane 1  (matching, j=0..1): 3 i × 2 k = 6
+        j-plane 2  (FAULTED, j=1..2) : 3 i-stacks × 3 conns = 9
+        j-plane 3  (boundary)        : 3 i × 2 k = 6
+
+        Total j-faces                : 27
+
+        (the +0.6 offset makes the upper j=1 cell overlap BOTH j=2
+         cells, so each faulted stack yields 3 connections, not 2.)
+    """
+    from cpg2unstructured.unstructured import find_j_faces
+    g = read_grdecl(fixtures / "simple_faulted_3x3x2_jfault.grdecl")
+    cube = from_grdecl(g)
+    faces = find_j_faces(cube)
+    assert faces.nodes.shape == (27, 4)
+    # All direction=1 (j-faces)
+    np.testing.assert_array_equal(
+        faces.direction, np.ones(27, dtype=np.int8),
+    )
+    # All neighbours in valid range
+    nbs = faces.neighbours
+    assert nbs.min() >= -1
+    assert nbs.max() < 18
