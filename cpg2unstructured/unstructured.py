@@ -791,6 +791,10 @@ class UnstructuredGrid:
     cell_corners: np.ndarray       # (Ncells_active, 8) int64 — node ids
     original_ijk: np.ndarray       # (Ncells_active, 3) int64
     cart_dims: tuple[int, int, int]
+    # (Mnnc, 2) int64 — non-neighbour connections: cell-id pairs that are
+    # connected without sharing a geometric face. Populated for cells
+    # bridged across a pinched-out layer (PR-12); empty (0, 2) otherwise.
+    nnc: np.ndarray = field(default_factory=lambda: np.empty((0, 2), dtype=np.int64))
     props: dict[str, np.ndarray] = field(default_factory=dict)
     _index_map: "IndexMap | None" = field(default=None, repr=False, compare=False)
 
@@ -908,6 +912,32 @@ def _active_lookup(idx_arr: np.ndarray, actnum_flat: np.ndarray) -> np.ndarray:
     if mask.any():
         result[mask] = actnum_flat[idx_arr[mask]]
     return result
+
+
+def _pinch_nncs(
+    keep3: np.ndarray, pin3: np.ndarray, o2n3: np.ndarray,
+    nx: int, ny: int, nz: int,
+) -> np.ndarray:
+    """Cross-layer NNC pairs (new cell ids) for pinch-bridged cells.
+
+    For each column (i, j), consecutive surviving cells separated *only*
+    by pinched-out cells (no genuine ACTNUM=0 gap) are connected by an
+    NNC — the pinch collapsed the layer between them to zero thickness,
+    so they are physically adjacent. Returns sorted unique ``(M, 2)``
+    int64 pairs (smaller new id in column 0).
+    """
+    pairs: set[tuple[int, int]] = set()
+    for i in range(nx):
+        for j in range(ny):
+            ks = np.where(keep3[i, j])[0]
+            for a, b in zip(ks[:-1], ks[1:]):
+                # gap between two survivors, filled entirely by pinches
+                if b > a + 1 and pin3[i, j, a + 1:b].all():
+                    ca, cb = int(o2n3[i, j, a]), int(o2n3[i, j, b])
+                    pairs.add((min(ca, cb), max(ca, cb)))
+    if not pairs:
+        return np.empty((0, 2), dtype=np.int64)
+    return np.array(sorted(pairs), dtype=np.int64)
 
 
 def build_topology(cube: CornerCube) -> UnstructuredGrid:
@@ -1078,6 +1108,15 @@ def build_topology(cube: CornerCube) -> UnstructuredGrid:
     k_idx = kept_old_idx // (nx * ny)
     original_ijk = np.stack([i_idx, j_idx, k_idx], axis=1).astype(np.int64)
 
+    # PR-12 — NNCs bridging the cells above/below each pinched-out layer.
+    pinched_3d = cube.pinched_3d
+    if pinched_3d is not None and pinched_3d.any():
+        keep3 = keep_cells.reshape(nx, ny, nz, order="F")
+        o2n3 = old_to_new.reshape(nx, ny, nz, order="F")
+        nnc = _pinch_nncs(keep3, pinched_3d, o2n3, nx, ny, nz)
+    else:
+        nnc = np.empty((0, 2), dtype=np.int64)
+
     return UnstructuredGrid(
         nodes=cube.nodes,
         faces=final_faces,
@@ -1085,4 +1124,5 @@ def build_topology(cube: CornerCube) -> UnstructuredGrid:
         cell_corners=cell_corners_new,
         original_ijk=original_ijk,
         cart_dims=cube.cart_dims,
+        nnc=nnc,
     )

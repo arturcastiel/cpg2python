@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added (phase 2-faults — working toward v0.2.0)
+- **PINCH NNCs — `UnstructuredGrid.nnc`.** A new `nnc: (M,2) int64`
+  field holds non-neighbour connections (cell-id pairs with no shared
+  geometric face). `build_topology` now bridges the cells above and
+  below a pinched-out layer with an NNC — they are physically adjacent
+  once the zero-thickness layer collapses. A genuine ACTNUM=0 gap is
+  NOT bridged (new `hole_1x1x3.grdecl` fixture proves the distinction).
+  `CornerCube` carries the pinch mask (`pinched_3d`) forward. Empty
+  `(0,2)` when there are no pinches. Per **ADR-2F-3**. (PR-12.)
 - **PINCH detection — pinched-out cells are dropped.** `from_grdecl`
   now folds zero-thickness (collapsed) cells out of the active set via
   `cpg._pinched_cell_mask(g, tol)`: a cell is pinched when its vertical

@@ -29,6 +29,10 @@ class CornerCube:
     P: np.ndarray
     cart_dims: tuple[int, int, int]
     actnum_3d: np.ndarray
+    # (NX,NY,NZ) bool — cells pinched out (collapsed) and dropped. Carried
+    # so build_topology can bridge the surviving neighbours with NNCs
+    # (PR-12). None when assembled without pinch tracking.
+    pinched_3d: np.ndarray | None = None
 
 
 def _coord_pillars(g: Grdecl) -> np.ndarray:
@@ -137,8 +141,13 @@ def from_grdecl(g: Grdecl, pinch_tol: float = 0.0) -> CornerCube:
     """
     nx, ny, nz = g.cart_dims
     actnum_3d = _actnum_3d(g)
-    # Drop pinched-out (zero-thickness) cells, treating them as inactive.
-    actnum_3d = actnum_3d & ~_pinched_cell_mask(g, tol=pinch_tol)
+    # Pinched-out (zero-thickness) cells that were otherwise active. A
+    # genuine ACTNUM=0 hole is NOT a pinch (so it is never NNC-bridged).
+    pinched_3d = _pinched_cell_mask(g, tol=pinch_tol) & actnum_3d
+    # Drop them, treating them as inactive (PR-11). The pinch mask is
+    # carried on CornerCube so build_topology can bridge the surviving
+    # cells above/below each pinch with an NNC (PR-12).
+    actnum_3d = actnum_3d & ~pinched_3d
 
     xyz = _assemble_corner_xyz(g)
     masked = _mask_inactive_corners(xyz, actnum_3d)
@@ -173,4 +182,5 @@ def from_grdecl(g: Grdecl, pinch_tol: float = 0.0) -> CornerCube:
         P=P,
         cart_dims=(nx, ny, nz),
         actnum_3d=actnum_3d,
+        pinched_3d=pinched_3d,
     )
