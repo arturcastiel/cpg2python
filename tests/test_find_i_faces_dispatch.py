@@ -1,7 +1,7 @@
-"""Dispatch tests for find_i_faces (PR-6 of phase 2-faults).
+"""Dispatch tests for find_i_faces.
 
 The widening of find_i_faces — matching vs faulted dispatch inline.
-Verifies (a) Tier A invariance on matching-Z fixtures and (b) the
+Verifies (a)  invariance on matching-Z fixtures and (b) the
 fault path produces the expected concatenated output on the
 simple_faulted_2x2x2 fixture.
 """
@@ -15,7 +15,7 @@ from cpg2unstructured._errors import NonMatchingZError
 from cpg2unstructured.unstructured import find_i_faces
 
 
-# ── Tier A invariance ──────────────────────────────────────────────
+# ──  invariance ──────────────────────────────────────────────
 
 
 def test_simple_2x2x2_byte_identical_post_dispatch(fixtures):
@@ -112,11 +112,11 @@ def test_simple_faulted_2x2x2_neighbour_col0_smaller(fixtures):
             assert nb[0] <= nb[1], f"col 0 should be <= col 1 for inner: {nb}"
 
 
-# ── build_topology still raises on faulted (PR-8 will widen it) ────
+# ── build_topology still raises on faulted ────
 
 
 def test_build_topology_succeeds_on_i_faulted_fixture(fixtures):
-    """Post-PR-8: build_topology end-to-end on simple_faulted_2x2x2.
+    """Post- build_topology end-to-end on simple_faulted_2x2x2.
     find_i_faces dispatches → build_topology assembles correctly."""
     from cpg2unstructured import build_topology
     g = read_grdecl(fixtures / "simple_faulted_2x2x2.grdecl")

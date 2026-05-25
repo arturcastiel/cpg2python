@@ -1,7 +1,7 @@
 """Shared pytest fixtures.
 
 Centralised here so test files can share mesh fixtures without
-re-defining them. Introduced by PR-11 (spec hygiene F-PR11-1) —
+re-defining them. Introduced by  (spec hygiene F-PR11-1) —
 ``mesh_2x2x2`` moved out of ``tests/test_graph.py``.
 """
 from __future__ import annotations
@@ -23,7 +23,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 @pytest.fixture
 def fixtures() -> Path:
-    """Path to the shared GRDECL fixture directory (PR-12)."""
+    """Path to the shared GRDECL fixture directory."""
     return FIXTURES
 
 
@@ -44,7 +44,7 @@ def mesh_3x3x2():
 def _make_cartesian_grdecl_text(nx: int, ny: int, nz: int) -> str:
     """Synthesize an all-active cartesian matching-Z GRDECL deck.
 
-    Used to build larger meshes on demand for the PR-11 numpy↔scipy
+    Used to build larger meshes on demand for the  numpy↔scipy
     agreement tests without committing extra fixture files.
     """
     lines: list[str] = [
@@ -78,7 +78,7 @@ def _make_cartesian_grdecl_text(nx: int, ny: int, nz: int) -> str:
 def mesh_5x5x3_with_centroids(tmp_path_factory):
     """Synthetic 5x5x3 mesh + centroids for fast-path agreement tests.
 
-    Scaled down from the PR-11 spec's 10x10x5 to keep the synthetic
+    Scaled down from the  spec's 10x10x5 to keep the synthetic
     GRDECL string + parse cheap. 75 cells still exercises non-trivial
     paths and is plenty to surface a weight-mode disagreement between
     heapq-Python and scipy's C impl.

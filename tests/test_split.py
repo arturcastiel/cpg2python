@@ -1,4 +1,4 @@
-"""Disconnected-grid splitting via UnstructuredGrid.split() (PR-14).
+"""Disconnected-grid splitting via UnstructuredGrid.split().
 
 `split()` materialises each connected component as an independent grid.
 A single-component grid returns `[self]`. Node ids stay global; cells,

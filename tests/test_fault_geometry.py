@@ -1,4 +1,4 @@
-"""Tests for the line-intersection helper (PR-3 of phase 2-faults).
+"""Tests for the line-intersection helper.
 
 Coord-based unit tests with hand-crafted line endpoints. No GRDECL,
 no nodes table — pure math.

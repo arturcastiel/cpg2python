@@ -1,4 +1,4 @@
-"""Property pass-through (PR-12) — ``attach_props`` + ``UnstructuredGrid``."""
+"""Property pass-through — ``attach_props`` + ``UnstructuredGrid``."""
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError, replace
@@ -94,7 +94,7 @@ def test_int_property_preserves_dtype(tmp_path, fixtures):
     p.write_text(src)
     g = read_grdecl(p)
     grid = attach_props(build_topology(from_grdecl(g)), g)
-    # PR-4 classifies SATNUM as int32; attach_props must preserve dtype.
+    #  classifies SATNUM as int32; attach_props must preserve dtype.
     assert grid["SATNUM"].dtype.kind == "i"
     assert grid["SATNUM"].shape == (grid.n_cells,)
 
@@ -145,11 +145,11 @@ def test_unstructuredgrid_re_exported():
     assert isinstance(grid, UnstructuredGrid)
 
 
-# ── interop with PR-10 / PR-11 graph (regression for the rename) ─────
+# ── interop with  /  graph (regression for the rename) ─────
 
 
 def test_graph_still_works_on_unstructuredgrid(fixtures):
-    """Renaming _TopoMesh → UnstructuredGrid must not break PR-10/PR-11
+    """Renaming _TopoMesh → UnstructuredGrid must not break /
     callers (the backward-compat alias keeps the type hints valid)."""
     from cpg2unstructured import cell_adjacency, shortest_path
     g = read_grdecl(fixtures / "simple_2x2x2.grdecl")

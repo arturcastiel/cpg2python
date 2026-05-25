@@ -1,4 +1,4 @@
-"""Connected-component labelling (PR-13 of phase 2-faults).
+"""Connected-component labelling.
 
 `UnstructuredGrid.component[c]` is the 0-based component id of cell `c`,
 computed over the inner-face + NNC adjacency. Labels are assigned in

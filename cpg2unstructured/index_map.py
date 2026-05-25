@@ -1,6 +1,6 @@
 """Active-cell id ↔ (i, j, k) translation with a lazy reverse map.
 
-PR-9 scope: wrap PR-7's `original_ijk` in a small bi-directional class.
+ scope: wrap an earlier `original_ijk` in a small bi-directional class.
 """
 from __future__ import annotations
 
@@ -18,13 +18,13 @@ class IndexMap:
         (NX, NY, NZ).
     original_ijk
         (Ncells_active, 3) int64. Eclipse-natural (i, j, k) per cell —
-        produced by `build_topology` (PR-7).
+        produced by `build_topology`.
 
     Notes
     -----
     Forward lookup (``cell_ijk``) is a simple array index. Reverse lookup
     (``active_id``) builds a dense ``(NX, NY, NZ)`` int64 array on first
-    call and caches it (D-PR9-1). Inactive cells return ``None`` rather
+    call and caches it. Inactive cells return ``None`` rather
     than raise.
     """
 

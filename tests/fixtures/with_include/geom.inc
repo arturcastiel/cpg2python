@@ -1,4 +1,4 @@
--- Geometry sub-deck for the with_include PR-4 fixture
+-- Geometry sub-deck for the with_include  fixture
 -- COORD + ZCORN for a 2x2x2 cartesian grid; no SPECGRID, no ACTNUM.
 
 COORD

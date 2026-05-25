@@ -1,5 +1,5 @@
 -- 2x2x2 cartesian deck with a deliberate zero-volume cell.
--- Used by PR-7's test_pinchout_drops_zero_volume_cell.
+-- Used by an earlier test_pinchout_drops_zero_volume_cell.
 --
 -- The top z-layer (k_slot=3) is pulled down to z=1 wherever cell (1,1,1)
 -- (or any cell sharing its top pillars) has a corner. Matching-Z
@@ -7,7 +7,7 @@
 -- (2,1), (1,2), (2,2) at k_slot=3 — concretely positions where
 -- i_slot ∈ {1,2,3} AND j_slot ∈ {1,2,3}.
 --
--- Effect on cells (per-face uniqueness rule, D-PR7-8):
+-- Effect on cells (per-face uniqueness rule, ):
 --   cell (1,1,1)            fully collapsed — 4 faces have only 2 unique
 --                            nodes → dropped as zero-volume.
 --   cells (0,1,1), (1,0,1)  share TWO pillars with (1,1,1); one face

@@ -1,7 +1,7 @@
 """Face + cell geometry for the unstructured mesh.
 
-PR-8 scope: centroids, areas, volumes via the divergence theorem.
-Consumes the topology produced by `unstructured.build_topology` (PR-7).
+ scope: centroids, areas, volumes via the divergence theorem.
+Consumes the topology produced by `unstructured.build_topology`.
 """
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ class FaceGeometry:
     centroids — (Nfaces, 3) float64
     areas     — (Nfaces,)   float64
     normals   — (Nfaces, 3) float64; unit length where area > 0, zero
-                vector for degenerate faces (D-PR8-4). Oriented per
+                vector for degenerate faces. Oriented per
                 `faces.neighbours[:, 0] → faces.neighbours[:, 1]` for
                 inner faces and outward-from-cell-0 for boundary faces.
     """
@@ -55,18 +55,18 @@ def face_geometry(
 
     `cell_corners` (mesh.cell_corners from `_TopoMesh`) provides a
     cell-centroid estimate (mean of the 8 corner node positions) used
-    ONLY for the orientation flip. See D-PR8-3.
+    ONLY for the orientation flip. See .
     """
     v = nodes[faces.nodes]                              # (Nfaces, 4, 3)
     centroids = v.mean(axis=1)
     N = v.shape[0]
 
-    # Faces.nodes is sorted by node ID (PR-6 dedup invariant), NOT in
+    # Faces.nodes is sorted by node ID, NOT in
     # spatial cyclic order. Triangle-fan from vertex 0 only works for
     # cyclic-ordered quads. For arbitrary vertex order on a planar
     # convex quad, area = (1/2) |d1 × d2| where d1, d2 are the two
     # diagonals. Diagonals are the 2 longest of the 6 pairwise
-    # distances (D-PR8-5).
+    # distances.
     PAIRS = np.array([[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]])
     diff = v[:, PAIRS[:, 0]] - v[:, PAIRS[:, 1]]        # (N, 6, 3)
     dists_sq = (diff ** 2).sum(axis=-1)                 # (N, 6)
@@ -79,15 +79,15 @@ def face_geometry(
     cross_d = np.cross(d1, d2)                          # (N, 3)
     norm_len = np.linalg.norm(cross_d, axis=1)
     areas = 0.5 * norm_len
-    safe_len = np.where(norm_len < 1e-15, 1.0, norm_len)   # D-PR8-4 guard
+    safe_len = np.where(norm_len < 1e-15, 1.0, norm_len)   #  guard
     normals = cross_d / safe_len[:, None]
     # Degenerate faces (norm_len < 1e-15) get a zero normal vector.
     normals = np.where(norm_len[:, None] < 1e-15, 0.0, normals)
 
-    # Orient normals per D-PR8-3 using cell-corners mean as centroid estimate.
+    # Orient normals per  using cell-corners mean as centroid estimate.
     cell_centroid_est = nodes[cell_corners].mean(axis=1)   # (Ncells, 3)
     cell0_ids = faces.neighbours[:, 0]
-    # Every face has at least one active cell on col 0 (PR-6 invariant:
+    # Every face has at least one active cell on col 0 ( invariant:
     # boundary faces have -1 in col 1, never col 0 — _move_minus_one_to_col1).
     cell0_centroid = cell_centroid_est[cell0_ids]          # (Nfaces, 3)
     away_dir = centroids - cell0_centroid

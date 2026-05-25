@@ -1,4 +1,4 @@
--- Top-level deck composed via INCLUDE for the PR-4 test pipeline.
+-- Top-level deck composed via INCLUDE for the  test pipeline.
 
 SPECGRID
   2 2 2 1 F /

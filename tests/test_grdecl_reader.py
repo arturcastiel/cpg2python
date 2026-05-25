@@ -108,7 +108,7 @@ def test_actnum_optional_defaults_all_active(tmp_path):
 
 
 # ────────────────────────────────────────────────────────────────────
-#  PR-4 — INCLUDE recursion + property pass-through
+#   — INCLUDE recursion + property pass-through
 # ────────────────────────────────────────────────────────────────────
 
 

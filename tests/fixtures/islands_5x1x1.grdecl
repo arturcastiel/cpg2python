@@ -4,7 +4,7 @@
 --   island A : i=0, i=1   (share an i-face)
 --   island B : i=3, i=4   (share an i-face)
 -- Nothing connects A and B (no shared face, no NNC) -> 2 components.
--- PR-14 of phase 2-faults - disconnected-grid split() fixture.
+--  - disconnected-grid split() fixture.
 
 SPECGRID
   5 1 1 1 F /

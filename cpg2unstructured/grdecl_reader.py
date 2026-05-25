@@ -1,7 +1,7 @@
 """Eclipse GRDECL reader.
 
-PR-3 scope: DIMENS / SPECGRID + COORD + ZCORN + ACTNUM.
-PR-4 scope: INCLUDE recursion + property pass-through (PORO / PERMX / ... ).
+ scope: DIMENS / SPECGRID + COORD + ZCORN + ACTNUM.
+ scope: INCLUDE recursion + property pass-through (PORO / PERMX / ... ).
 """
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ _PROP_KEYWORDS_INT = frozenset({
 
 @dataclass(frozen=True)
 class Grdecl:
-    """Parsed GRDECL deck (PR-3 + PR-4 keyword set)."""
+    """Parsed GRDECL deck."""
 
     cart_dims: tuple[int, int, int]              # (NX, NY, NZ)
     coord: np.ndarray                            # (n_pillars, 6)  float64

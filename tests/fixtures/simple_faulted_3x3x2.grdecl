@@ -11,7 +11,7 @@
 -- both cells on the i=2 side, so each faulted pillar stack yields
 -- 3 connections (not 2): 3 j-rows × 3 conns = 9 fault faces.
 --
--- This is the regression fixture for PR-9 of phase 2-faults — it
+-- This is the regression fixture for  — it
 -- exercises the find_i_faces dispatch on a multi-row grid (the
 -- 2x2x2 fixtures only have 2 j-rows each).
 

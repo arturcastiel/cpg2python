@@ -1,7 +1,7 @@
-"""Scipy-backed graph fast path (PR-11).
+"""Scipy-backed graph fast path.
 
 Skipped entirely if scipy is not installed (use the ``[fast]`` extra).
-Verifies numerical agreement with the pure-numpy reference from PR-10.
+Verifies numerical agreement with the pure-numpy reference from 
 """
 from __future__ import annotations
 

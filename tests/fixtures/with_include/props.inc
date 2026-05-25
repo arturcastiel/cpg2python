@@ -1,4 +1,4 @@
--- Properties sub-deck for the with_include PR-4 fixture
+-- Properties sub-deck for the with_include  fixture
 -- 8 cells, two scalar properties
 
 PORO

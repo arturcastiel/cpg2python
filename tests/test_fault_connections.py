@@ -1,4 +1,4 @@
-"""Tests for the 1D fault-stack connection sweeper (PR-2 of phase 2-faults).
+"""Tests for the 1D fault-stack connection sweeper.
 
 Pure unit tests with hand-crafted z-list inputs — no GRDECL parsing,
 no geometry. Covers all three branches of ``do_intersect`` (per-pillar

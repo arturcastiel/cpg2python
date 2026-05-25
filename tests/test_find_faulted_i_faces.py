@@ -1,10 +1,10 @@
-"""Integration tests for ``_find_faulted_i_faces`` (PR-5 of phase 2-faults).
+"""Integration tests for ``_find_faulted_i_faces``.
 
-First PR that wires together PR-2 (find_connections) + PR-4
-(compute_face_geometry) + PR-1's faulted mask helper into a real
+First PR that wires together  (find_connections) + 
+(compute_face_geometry) + an earlier faulted mask helper into a real
 fault-face producer.
 
-Restrictions tested (per PR-5 spec):
+Restrictions tested (per  spec):
   - all-active stacks only
   - 4-corner fault polygons only
 """
@@ -69,7 +69,7 @@ def test_simple_faulted_2x2x2_produces_3_fault_faces(fixtures):
     np.testing.assert_array_equal(faces.direction, np.zeros(6, dtype=np.int8))
 
     # No intersection nodes appended (4-corner polygons use only pillar
-    # corners — PR-5 restriction enforced).
+    # corners —  restriction enforced).
     assert new_nodes.shape == cube.nodes.shape
 
 
@@ -114,7 +114,7 @@ def test_simple_faulted_2x2x2_face_normal_a_to_b_via_neighbours(fixtures):
             assert nb[0] <= nb[1], f"col 0 should be <= col 1 for inner: {nb}"
 
 
-# ── PR-5 restriction enforcement: inactive cells in fault stack ────
+# ──  restriction enforcement: inactive cells in fault stack ────
 
 
 def test_inactive_cell_in_fault_stack_raises(tmp_path, fixtures):
@@ -136,11 +136,11 @@ def test_inactive_cell_in_fault_stack_raises(tmp_path, fixtures):
         _find_faulted_i_faces(cube)
 
 
-# ── build_topology still raises (PR-5 doesn't widen build_topology) ─
+# ── build_topology still raises ─
 
 
 def test_build_topology_succeeds_on_faulted_fixture(fixtures):
-    """Post-PR-8: build_topology succeeds end-to-end on the i-fault
+    """Post- build_topology succeeds end-to-end on the i-fault
     fixture (the build_topology guard was relaxed to only catch
     k-direction faults)."""
     from cpg2unstructured import build_topology

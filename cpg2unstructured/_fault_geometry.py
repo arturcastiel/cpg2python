@@ -1,17 +1,17 @@
 # Derived from MRST's processGRDECL.m computeFaceGeometry / intersection
 # (corner-point grid processing), (C) SINTEF Digital, GNU GPL v3.
 # See README + NOTICE.
-"""Fault-face geometry helpers (PR-3+ of phase 2-faults).
+"""Fault-face geometry helpers.
 
 Pure geometric primitives:
 
-- :func:`line_intersection` (PR-3) — XYZ intersection of two
+- :func:`line_intersection` — XYZ intersection of two
   line-segment families, z-parametrised.
-- :func:`compute_face_geometry` (PR-4) — full 8-position J-table
+- :func:`compute_face_geometry` — full 8-position J-table
   polygon assembler for fault faces, including the 4 diamond cases.
 
 NOT public API — ``cpg2unstructured.unstructured`` consumes these
-internally when integration lands in PR-5+ of phase 2-faults.
+internally by the topology builder.
 """
 from __future__ import annotations
 
@@ -73,7 +73,7 @@ def line_intersection(la_start: np.ndarray,
         If any line pair has ``|Δz_A - Δz_B| < _DENOM_EPS`` —
         the two z-trajectories are parallel and no unique
         intersection exists by this parametrisation. (R-3 from
-        the phase 2-faults study.)
+        the design study.)
     """
     la_start = np.asarray(la_start, dtype=np.float64)
     la_end   = np.asarray(la_end,   dtype=np.float64)

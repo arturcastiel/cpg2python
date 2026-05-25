@@ -12,7 +12,7 @@
 -- 3 connections (not 2): 3 i-cols × 3 conns = 9 fault j-faces.
 --
 -- This is the j-direction analogue of simple_faulted_3x3x2.grdecl
--- (PR-9, i-fault). PR-10 of phase 2-faults — exercises the
+--.  — exercises the
 -- find_j_faces dispatch on a multi-column grid.
 
 SPECGRID

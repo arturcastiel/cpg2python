@@ -1,7 +1,7 @@
 """Cell-cell adjacency + shortest-path.
 
-PR-10 — pure-numpy reference path: ``cell_adjacency`` + ``shortest_path``.
-PR-11 — optional scipy.sparse fast path under the ``[fast]`` extra:
+ — pure-numpy reference path: ``cell_adjacency`` + ``shortest_path``.
+ — optional scipy.sparse fast path under the ``[fast]`` extra:
         ``cell_adjacency_csgraph`` + ``shortest_path_fast``. Functions
         exist unconditionally; calls raise ``ImportError`` (with a
         message naming the ``[fast]`` extra) if scipy is not installed.
@@ -40,7 +40,7 @@ def cell_adjacency(
     weights
         - ``"unit"``     : weight = 1.0 on every edge.
         - ``"distance"`` : weight = Euclidean ‖centroid_i − centroid_j‖₂.
-                           Requires ``cell_centroids`` (PR-8 output).
+                           Requires ``cell_centroids``.
         - ``"none"``     : same numerical behaviour as ``"unit"`` but
                            documented as "no weighting" so user code
                            reads more clearly.
@@ -120,7 +120,7 @@ def shortest_path(
 
 
 # ──────────────────────────────────────────────────────────────────────
-# PR-11 — optional scipy.sparse fast path
+#  — optional scipy.sparse fast path
 # ──────────────────────────────────────────────────────────────────────
 
 try:

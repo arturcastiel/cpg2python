@@ -1,6 +1,6 @@
 """Toy 2×2×2 cartesian CPG → unstructured-mesh pipeline.
 
-Internal smoke fixture used by tests and (later) by PR-3..PR-7 as a
+Internal smoke fixture used by tests and (later) by . as a
 regression target. NOT public API — leading underscore.
 """
 from __future__ import annotations

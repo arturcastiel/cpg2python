@@ -1,7 +1,7 @@
-"""Tests for ``compute_face_geometry`` (PR-4 of phase 2-faults).
+"""Tests for ``compute_face_geometry``.
 
 The 8-position J-table polygon assembler with 4 diamond cases.
-Algorithmic hot spot of phase 2-faults — most subtle branching.
+Algorithmic hot spot — most subtle branching.
 
 Coverage strategy: hand-crafted scenarios constructed via the
 ``_make_inputs`` helper. Each test pins down ONE branch

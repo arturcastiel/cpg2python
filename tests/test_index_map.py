@@ -84,7 +84,7 @@ def test_linear_to_cell_eclipse_natural():
 
 
 def test_reverse_built_lazily():
-    # Defence test for acceptance #6 (D-PR9-1).
+    # Defence test for acceptance #6.
     nx, ny, nz = 2, 2, 2
     ijk = _eclipse_natural_ijk(np.ones((nx, ny, nz), dtype=bool))
     im = IndexMap((nx, ny, nz), ijk)

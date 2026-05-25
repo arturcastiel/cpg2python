@@ -3,7 +3,7 @@
 # See the README "Attribution & provenance" section and the NOTICE file.
 """CPG geometry assembly: Grdecl → corner cube → unique nodes + P map.
 
-PR-5 scope: `from_grdecl` returns a `CornerCube` carrying
+ scope: `from_grdecl` returns a `CornerCube` carrying
 - `nodes`     : (Nnodes, 3) float64 unique XYZ
 - `P`         : (2*NX, 2*NY, 2*NZ) int64 indexing into `nodes`
                 (or -1 for slots owned by inactive cells)
@@ -22,7 +22,7 @@ from cpg2unstructured.grdecl_reader import Grdecl
 __all__ = ["from_grdecl", "CornerCube"]
 
 
-_QUANT = 1_000_000_000  # 1e9 — must match cpg2unstructured._toy._QUANT (D-PR5-2)
+_QUANT = 1_000_000_000  # 1e9 — must match cpg2unstructured._toy._QUANT
 
 
 @dataclass(frozen=True)
@@ -34,7 +34,7 @@ class CornerCube:
     actnum_3d: np.ndarray
     # (NX,NY,NZ) bool — cells pinched out (collapsed) and dropped. Carried
     # so build_topology can bridge the surviving neighbours with NNCs
-    # (PR-12). None when assembled without pinch tracking.
+    #. None when assembled without pinch tracking.
     pinched_3d: np.ndarray | None = None
 
 
@@ -44,7 +44,7 @@ def _coord_pillars(g: Grdecl) -> np.ndarray:
     Eclipse stores COORD NX-fastest in flat (i is the fast index). The
     native reshape of the (NX+1)*(NY+1) pillar block is therefore
     (NY+1, NX+1, 6); transposing the leading two axes recovers the
-    intuitive coord_pp[i, j] = pillar(i, j) indexing. See D-PR5-3.
+    intuitive coord_pp[i, j] = pillar(i, j) indexing. See .
     """
     nx, ny, _ = g.cart_dims
     return g.coord.reshape(ny + 1, nx + 1, 6).transpose(1, 0, 2).copy()
@@ -68,7 +68,7 @@ def _pinched_cell_mask(g: Grdecl, tol: float = 0.0) -> np.ndarray:
     A cell is pinched (collapsed) when its vertical thickness is ≤ ``tol``
     on *all four* pillars, i.e. the thickest corner is still ≤ tol. Such
     zero-height cells carry no volume and are dropped from the active set
-    (MRST `processGRDECL` removes pinched cells; PR-12 then bridges the
+    (MRST `processGRDECL` removes pinched cells;  then bridges the
     cells above and below with an NNC). With the default ``tol=0.0`` only
     exactly-collapsed cells are caught, so ordinary decks are untouched.
     """
@@ -147,9 +147,9 @@ def from_grdecl(g: Grdecl, pinch_tol: float = 0.0) -> CornerCube:
     # Pinched-out (zero-thickness) cells that were otherwise active. A
     # genuine ACTNUM=0 hole is NOT a pinch (so it is never NNC-bridged).
     pinched_3d = _pinched_cell_mask(g, tol=pinch_tol) & actnum_3d
-    # Drop them, treating them as inactive (PR-11). The pinch mask is
+    # Drop them, treating them as inactive. The pinch mask is
     # carried on CornerCube so build_topology can bridge the surviving
-    # cells above/below each pinch with an NNC (PR-12).
+    # cells above/below each pinch with an NNC.
     actnum_3d = actnum_3d & ~pinched_3d
 
     xyz = _assemble_corner_xyz(g)

@@ -75,9 +75,9 @@ def test_find_ij_faces_shape(cube_2x2x2):
 
 
 def test_fault_dispatches_in_find_i_faces():
-    """Post-PR-6 (phase 2-faults): find_i_faces no longer raises on
+    """Post- find_i_faces no longer raises on
     fault_simple.grdecl — it dispatches matching vs faulted inline
-    (D-2F-1). The single-corner Z mismatch flags one i-pillar stack
+. The single-corner Z mismatch flags one i-pillar stack
     as faulted; the dispatcher drops the matching inner faces in that
     stack and emits replacement fault faces from _find_faulted_i_faces.
     Total i-face count is preserved (single-corner mismatch produces
@@ -93,8 +93,8 @@ def test_fault_dispatches_in_find_i_faces():
 
 def test_actnum_excludes_inactive_face(tmp_path):
     # Criterion #7 defence: with cell (1,1,1) inactive, the matching-Z
-    # check must NOT fire (D-PR6-3); face quads on the active side of
-    # the degraded boundary must NOT contain -1 (D-PR6-4).
+    # check must NOT fire; face quads on the active side of
+    # the degraded boundary must NOT contain -1.
     src = (FIXTURES / "simple_2x2x2.grdecl").read_text().replace(
         "ACTNUM\n  8*1 /",
         "ACTNUM\n  1 1 1 1  1 1 1 0 /",
@@ -123,7 +123,7 @@ def test_faces_dataclass_fields(cube_2x2x2):
 
 
 # ────────────────────────────────────────────────────────────────────
-#  PR-7 — k-faces + cell-face inversion + active-cell rebuild
+#   — k-faces + cell-face inversion + active-cell rebuild
 # ────────────────────────────────────────────────────────────────────
 
 
@@ -190,7 +190,7 @@ def test_pinchout_drops_zero_volume_cell():
     #                               wedge with worst-face 3 unique → KEPT
     # → 8 - 3 = 5 active+real cells.
     # Spec criterion #5 ("one collapsed cell → 7 active") was geometrically
-    # naive; the corrected per-face uniqueness rule (D-PR7-8) makes this
+    # naive; the corrected per-face uniqueness rule makes this
     # concrete.
     assert mesh.cell_faces.shape[0] == 5
     # The strictly-collapsed cell (1, 1, 1) must NOT appear in survivors.
@@ -240,7 +240,7 @@ def test_topology_no_negative_node_ids(cube_2x2x2):
 
 
 def test_fault_succeeds_end_to_end_in_build_topology():
-    """Post-PR-8 (phase 2-faults): build_topology no longer raises on
+    """Post- build_topology no longer raises on
     i-direction faults. The fault_simple.grdecl deck has a single
     i-fault that find_i_faces dispatches through _find_faulted_i_faces;
     build_topology now produces a valid UnstructuredGrid end-to-end.

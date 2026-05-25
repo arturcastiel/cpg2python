@@ -1,9 +1,9 @@
 """End-to-end tests for ``build_topology`` on faulted decks
-(PR-8 of phase 2-faults).
+.
 
-The headline outcome of PR-8: ``build_topology`` no longer raises on
+The headline outcome of  ``build_topology`` no longer raises on
 i- or j-direction faulted decks. The i/j fault dispatch from
-PR-6/PR-7 + the removal of the top-level guard in ``build_topology``
+/ + the removal of the top-level guard in ``build_topology``
 mean a faulted deck flows end-to-end through the topology builder.
 
 k-direction faults still raise — k-fault dispatch is deferred to a
@@ -49,7 +49,7 @@ def test_build_topology_on_simple_faulted_2x2x2_j(fixtures):
     assert grid.cell_faces.shape == (8, 6)
 
 
-# ── PR-9 regression: 3x3x2 multi-column i-fault ────────────────────
+# ──  regression: 3x3x2 multi-column i-fault ────────────────────
 
 
 def test_build_topology_on_simple_faulted_3x3x2(fixtures):
@@ -139,12 +139,12 @@ def test_build_topology_raises_on_k_fault(tmp_path, fixtures):
         build_topology(cube)
 
 
-# ── PR-10 regression: 3x3x2 multi-column j-fault (mirror of PR-9) ───
+# ──  regression: 3x3x2 multi-column j-fault (mirror of ) ───
 
 
 def test_build_topology_on_simple_faulted_3x3x2_jfault(fixtures):
     """3x3x2 multi-column j-fault: +0.6 Z offset on the j=2 row.
-    The j-direction analogue of the PR-9 i-fault fixture — exercises
+    The j-direction analogue of the  i-fault fixture — exercises
     find_j_faces dispatch on a multi-column grid (3 i-columns)."""
     g = read_grdecl(fixtures / "simple_faulted_3x3x2_jfault.grdecl")
     cube = from_grdecl(g)
@@ -157,7 +157,7 @@ def test_build_topology_on_simple_faulted_3x3x2_jfault(fixtures):
 
 
 def test_simple_faulted_3x3x2_jfault_j_face_dispatch_count(fixtures):
-    """find_j_faces on the 3x3x2 j-fault deck — symmetric to PR-9:
+    """find_j_faces on the 3x3x2 j-fault deck — symmetric to 
 
         j-plane 0  (boundary)        : 3 i × 2 k = 6
         j-plane 1  (matching, j=0..1): 3 i × 2 k = 6

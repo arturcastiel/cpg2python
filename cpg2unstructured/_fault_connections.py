@@ -1,6 +1,6 @@
 # Derived from MRST's processGRDECL.m findConnections (corner-point grid
 # processing), (C) SINTEF Digital, GNU GPL v3. See README + NOTICE.
-"""Fault-stack connection sweeping (PR-2 of phase 2-faults).
+"""Fault-stack connection sweeping.
 
 Pure 1D segment-overlap algorithm. No geometry, no node coordinates.
 Given the z-values along a faulted pillar pair (one for each side of
@@ -11,7 +11,7 @@ Direct port of MRST's ``findConnections`` / ``doIntersect`` /
 "Attribution & provenance" section for the algorithmic provenance.
 
 NOT public API — ``cpg2unstructured.unstructured`` consumes these
-internally when integration lands in PR-5+ of phase 2-faults.
+internally by the topology builder.
 """
 from __future__ import annotations
 

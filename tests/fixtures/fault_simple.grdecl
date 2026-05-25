@@ -1,5 +1,5 @@
 -- 2x2x2 cartesian deck with a deliberate non-matching Z at one slot.
--- Used by PR-6's test_fault_raises_clean_error.
+-- Used by an earlier test_fault_raises_clean_error.
 --
 -- Identical to simple_2x2x2.grdecl EXCEPT ZCORN at
 --   (i_slot=2, j_slot=0, k_slot=0)  =  flat index 2  =  0.5  (was 0).

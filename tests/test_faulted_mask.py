@@ -1,10 +1,10 @@
-"""Faulted-pillar mask helpers (PR-1 of phase 2-faults).
+"""Faulted-pillar mask helpers.
 
 Verifies that the new ``_faulted_pillar_mask_{i,j,k}`` predicates
 return the right shapes + content on both matching-Z and faulted
 fixtures, AND that ``find_*_faces`` still raise ``NonMatchingZError``
 on faulted decks (behaviour-preserving — the widening to dispatch
-inline lands in PR-6/PR-7/PR-8).
+inline lands in //).
 """
 from __future__ import annotations
 
@@ -90,9 +90,9 @@ def test_simple_faulted_2x2x2_no_k_fault(fixtures):
 
 
 def test_find_i_faces_dispatches_on_faulted_fixture(fixtures):
-    """After PR-6 (phase 2-faults), find_i_faces dispatches matching
+    """After , find_i_faces dispatches matching
     vs faulted inline and SUCCEEDS on simple_faulted_2x2x2 (was raising
-    before PR-6). The output Faces record contains matching-Z faces
+    before ). The output Faces record contains matching-Z faces
     from non-faulted stacks + fault-faces from faulted stacks."""
     g = read_grdecl(fixtures / "simple_faulted_2x2x2.grdecl")
     cube = from_grdecl(g)
@@ -112,7 +112,7 @@ def test_find_i_faces_dispatches_on_faulted_fixture(fixtures):
 def test_find_j_faces_no_raise_on_faulted_fixture(fixtures):
     """j-direction is unfaulted on this fixture; find_j_faces should
     complete normally even though the deck has an i-fault.
-    Post-PR-7: find_j_faces always dispatches (no longer raises on
+    Post- find_j_faces always dispatches (no longer raises on
     j-faulted decks either), but this fixture has zero j-faulted
     stacks so the matching-Z fast path runs."""
     g = read_grdecl(fixtures / "simple_faulted_2x2x2.grdecl")
@@ -131,7 +131,7 @@ def test_find_k_faces_no_raise_on_faulted_fixture(fixtures):
 
 
 def test_build_topology_succeeds_on_faulted_fixture(fixtures):
-    """Post-PR-8: build_topology end-to-end on simple_faulted_2x2x2.
+    """Post- build_topology end-to-end on simple_faulted_2x2x2.
     find_i_faces dispatches the i-fault; build_topology assembles the
     full UnstructuredGrid."""
     g = read_grdecl(fixtures / "simple_faulted_2x2x2.grdecl")
@@ -141,7 +141,7 @@ def test_build_topology_succeeds_on_faulted_fixture(fixtures):
     assert grid.n_cells == 8  # 2x2x2 all-active
 
 
-# ── Tier A regression: matching-Z deck still works ───────────────────
+# ──  regression: matching-Z deck still works ───────────────────
 
 
 def test_find_i_faces_no_raise_on_matching_fixture(fixtures):

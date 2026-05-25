@@ -3,10 +3,10 @@
 # See the README "Attribution & provenance" section and the NOTICE file.
 """Unstructured-mesh face finders + topology builder for matching-Z CPG.
 
-PR-6 covers i-faces + j-faces (regular, matching-Z).
-PR-7 adds k-faces, cell-face inversion, active-cell rebuild,
+ covers i-faces + j-faces (regular, matching-Z).
+ adds k-faces, cell-face inversion, active-cell rebuild,
 and the topology-only orchestrator `build_topology`.
-PR-12 promotes the topology-only `_TopoMesh` to the public
+ promotes the topology-only `_TopoMesh` to the public
 `UnstructuredGrid` (read-only properties dict + `__getitem__` accessor
 + lazy IndexMap cache) and adds the `attach_props` filter for
 Eclipse cell-properties → active-cell order. `_TopoMesh` survives as
@@ -37,28 +37,28 @@ __all__ = [
 ]
 
 
-# ── phase 2-faults · PR-5 ───────────────────────────────────────────
+# ── fault-face glue (faulted-grid support) ──────────────────
 # Imports for the fault-face glue function (used internally).
-# The actual integration into find_*_faces lands in PR-6/PR-7/PR-8.
+# The actual integration into find_*_faces happens below.
 from cpg2unstructured._fault_connections import find_connections
 from cpg2unstructured._fault_geometry import compute_face_geometry
 
 
-# Local-corner ordering — matches PR-5's `_LOCAL_CORNERS` (see D-PR7-6).
+# Local-corner ordering — matches an earlier `_LOCAL_CORNERS`.
 _LOCAL_CORNERS = (
     (0, 0, 0), (1, 0, 0), (0, 1, 0), (1, 1, 0),
     (0, 0, 1), (1, 0, 1), (0, 1, 1), (1, 1, 1),
 )
 
 # Direction → (low-cell slot, high-cell slot) in cell_faces[i-, i+, j-, j+, k-, k+]
-# (see D-PR7-7).
+#.
 _SLOT_LOW  = (1, 3, 5)   # low side gets the "+" slot
 _SLOT_HIGH = (0, 2, 4)   # high side gets the "-" slot
 
 
 # Local face → 4 cell-corner indices (per `_LOCAL_CORNERS` order).
-# Matches PR-2's `_toy._LOCAL_FACES` slot pattern; used by `_real_cell_mask`
-# for the per-face uniqueness check (D-PR7-8).
+# Matches an earlier `_toy._LOCAL_FACES` slot pattern; used by `_real_cell_mask`
+# for the per-face uniqueness check.
 _LOCAL_FACES = np.array([
     [0, 2, 6, 4],  # i-
     [1, 3, 7, 5],  # i+
@@ -81,7 +81,7 @@ class Faces:
         (Nfaces, 2) int64 — adjacent cell ids. Inner faces: smaller id
         in column 0. Boundary faces: -1 in column 1.
     direction
-        (Nfaces,) int8 — 0 = i-face, 1 = j-face, 2 = k-face (PR-7).
+        (Nfaces,) int8 — 0 = i-face, 1 = j-face, 2 = k-face.
     """
     nodes: np.ndarray
     neighbours: np.ndarray
@@ -135,11 +135,11 @@ def _faulted_pillar_mask_i(P: np.ndarray, actnum_3d: np.ndarray) -> np.ndarray:
     (in which case the face isn't an active-active i-face).
 
     Compares only at corner-slot positions where BOTH adjacent cells
-    are active. PR-5's ``-1`` sentinel for inactive cells would
-    otherwise produce spurious mismatches (D-PR6-3).
+    are active. an earlier ``-1`` sentinel for inactive cells would
+    otherwise produce spurious mismatches.
 
-    Replaces phase 1-design's ``_verify_matching_z_i`` raise-on-fault
-    helper. Phase 2-faults (D-2F-1) widens ``find_*_faces`` to dispatch
+    Replaces the earlier ``_verify_matching_z_i`` raise-on-fault
+    helper. The faulted-grid support widens ``find_*_faces`` to dispatch
     matching vs faulted; this predicate is the dispatch primitive.
     """
     nx, ny, nz = actnum_3d.shape
@@ -161,7 +161,7 @@ def _i_face_quads(P: np.ndarray) -> np.ndarray:
     Reads BOTH side columns from P; selects elementwise via
     `np.where(vL == -1, vR, vL)` so inactive-cell -1 sentinels never
     leak into the face quad. Boundary planes degenerate both columns
-    to the only available side. See D-PR6-4.
+    to the only available side. See .
     """
     twonx, twony, twonz = P.shape
     nx, ny, nz = twonx // 2, twony // 2, twonz // 2
@@ -185,7 +185,7 @@ def _find_faulted_i_faces(cube: CornerCube) -> tuple[Faces, np.ndarray]:
     Walks every faulted (i, j) pillar-pair stack and emits a face per
     connection produced by :func:`find_connections`.
 
-    Restrictions (phase 2-faults PR-5 scope — will be relaxed in PR-9):
+    Restrictions:
 
     1. **All-active stacks only.** Every cell in the stack on both
        A-side (column i) and B-side (column i+1) must be active.
@@ -210,8 +210,8 @@ def _find_faulted_i_faces(cube: CornerCube) -> tuple[Faces, np.ndarray]:
         grid edge with mixed active/boundary cells on a faulted
         pillar pair).  ``faces.direction`` is all-0 (i-direction).
     new_points : (n_points, 3) float64
-        Updated node table — copy of ``cube.nodes`` since under PR-5
-        restrictions no intersection points are appended. PR-9 will
+        Updated node table — copy of ``cube.nodes`` since under 
+        restrictions no intersection points are appended.  will
         relax this and append intersection nodes here.
 
     Notes
@@ -235,7 +235,7 @@ def _find_faulted_i_faces(cube: CornerCube) -> tuple[Faces, np.ndarray]:
     # has a faulted i-face on this pillar pair.
     stack_faulted = faulted_mask.any(axis=2)         # (NX-1, NY)
 
-    # Global F-order cell index → active-cell ID (PR-7 style).
+    # Global F-order cell index → active-cell ID.
     actnum_flat = actnum_3d.ravel(order="F")
     flat_active_id = np.full(nx * ny * nz, -1, dtype=np.int64)
     flat_active_id[actnum_flat] = np.arange(int(actnum_flat.sum()))
@@ -268,8 +268,8 @@ def _find_faulted_i_faces(cube: CornerCube) -> tuple[Faces, np.ndarray]:
         if not (actnum_flat[a_global].all() and actnum_flat[b_global].all()):
             raise NonMatchingZError(
                 f"inactive cells in faulted i-stack (i={i}-{i+1}, "
-                f"j={j}) — phase 2-faults v0.2.0 supports only "
-                "all-active fault stacks (see PR-9 — v2 only)"
+                f"j={j}) — v0.2.0 supports only "
+                "all-active fault stacks"
             )
         a_active_ids = flat_active_id[a_global]
         b_active_ids = flat_active_id[b_global]
@@ -325,16 +325,16 @@ def _find_faulted_i_faces(cube: CornerCube) -> tuple[Faces, np.ndarray]:
             pa_conn, pb_conn, nodes,
         )
 
-        # PR-5 restriction #2: only 4-corner polygons supported.
+        #  restriction #2: only 4-corner polygons supported.
         if not (num_nodes == 4).all():
             offender = int(np.argmax(num_nodes != 4))
             raise NonMatchingZError(
                 f"fault polygon at connection {offender} of stack "
                 f"i={i}-{i+1}, j={j} has {int(num_nodes[offender])} "
-                "corners; phase 2-faults v0.2.0 supports only "
-                "4-corner fault polygons (see PR-9 — v2 only)"
+                "corners; v0.2.0 supports only "
+                "4-corner fault polygons"
             )
-        # PR-5 restriction (corollary): no new intersection points
+        #  restriction (corollary): no new intersection points
         # may be appended (a 4-corner polygon uses only pillar
         # corners → no entries in compute_face_geometry's intersection
         # list).
@@ -342,7 +342,7 @@ def _find_faulted_i_faces(cube: CornerCube) -> tuple[Faces, np.ndarray]:
             raise NonMatchingZError(
                 f"unexpected intersection nodes from fault stack "
                 f"i={i}-{i+1}, j={j} — fault polygons are 4-corner "
-                "but new_nodes grew; see PR-9 for variable-corner "
+                "but new_nodes grew; see  for variable-corner "
                 "support (v2 only)"
             )
 
@@ -365,7 +365,7 @@ def _find_faulted_i_faces(cube: CornerCube) -> tuple[Faces, np.ndarray]:
 
 
 def _empty_faces(direction: int = 0) -> Faces:
-    """Return an empty Faces record for a given direction (PR-5 helper)."""
+    """Return an empty Faces record for a given direction."""
     return Faces(
         nodes=np.zeros((0, 4), dtype=np.int64),
         neighbours=np.zeros((0, 2), dtype=np.int64),
@@ -377,9 +377,9 @@ def find_i_faces(cube: CornerCube) -> Faces:
     """All i-direction faces (inner + boundary) as a ``Faces`` record.
 
     Dispatches matching-Z stacks to the v0.1.0 fast path and faulted
-    stacks to :func:`_find_faulted_i_faces` (phase 2-faults D-2F-1).
+    stacks to :func:`_find_faulted_i_faces`.
     When no faulted stacks are present, the output is byte-identical
-    to v0.1.0 — Tier A invariance.
+    to v0.1.0 —  invariance.
     """
     nx, ny, nz = cube.cart_dims
     P = cube.P
@@ -479,7 +479,7 @@ def _find_faulted_j_faces(cube: CornerCube) -> tuple[Faces, np.ndarray]:
     Walks every faulted (i, j) j-pillar-pair stack and emits a face
     per connection produced by :func:`find_connections`.
 
-    Restrictions (same as PR-5/PR-6 — lifted in PR-9):
+    Restrictions (same as / — lifted in ):
         - All-active stacks only.
         - 4-corner fault polygons only.
 
@@ -529,8 +529,8 @@ def _find_faulted_j_faces(cube: CornerCube) -> tuple[Faces, np.ndarray]:
         if not (actnum_flat[a_global].all() and actnum_flat[b_global].all()):
             raise NonMatchingZError(
                 f"inactive cells in faulted j-stack (i={i}, j={j}-{j+1}) "
-                "— phase 2-faults v0.2.0 supports only all-active fault "
-                "stacks (see PR-9 — v2 only)"
+                "— v0.2.0 supports only all-active fault "
+                "stacks"
             )
         a_active_ids = flat_active_id[a_global]
         b_active_ids = flat_active_id[b_global]
@@ -587,13 +587,13 @@ def _find_faulted_j_faces(cube: CornerCube) -> tuple[Faces, np.ndarray]:
             raise NonMatchingZError(
                 f"fault polygon at connection {offender} of j-stack "
                 f"i={i}, j={j}-{j+1} has {int(num_nodes[offender])} "
-                "corners; phase 2-faults v0.2.0 supports only "
-                "4-corner fault polygons (see PR-9 — v2 only)"
+                "corners; v0.2.0 supports only "
+                "4-corner fault polygons"
             )
         if new_nodes.shape[0] != nodes.shape[0]:
             raise NonMatchingZError(
                 f"unexpected intersection nodes from j-stack "
-                f"i={i}, j={j}-{j+1} — see PR-9 for variable-corner "
+                f"i={i}, j={j}-{j+1} — see  for variable-corner "
                 "support (v2 only)"
             )
 
@@ -620,9 +620,9 @@ def find_j_faces(cube: CornerCube) -> Faces:
     """All j-direction faces (inner + boundary) as a ``Faces`` record.
 
     Dispatches matching-Z stacks to the v0.1.0 fast path and faulted
-    stacks to :func:`_find_faulted_j_faces` (phase 2-faults D-2F-1).
+    stacks to :func:`_find_faulted_j_faces`.
     When no faulted stacks are present, the output is byte-identical
-    to v0.1.0 — Tier A invariance.
+    to v0.1.0 —  invariance.
     """
     nx, ny, nz = cube.cart_dims
     P = cube.P
@@ -686,7 +686,7 @@ def find_ij_faces(cube: CornerCube) -> Faces:
     )
 
 
-# ── k-faces (PR-7) ──────────────────────────────────────────────────────────
+# ── k-faces ──────────────────────────────────────────────────────────
 
 
 def _faulted_pillar_mask_k(P: np.ndarray, actnum_3d: np.ndarray) -> np.ndarray:
@@ -697,7 +697,7 @@ def _faulted_pillar_mask_k(P: np.ndarray, actnum_3d: np.ndarray) -> np.ndarray:
     (NX, NY, NZ-1) bool — True at (i, j, k) means the active k-face
     between cells (i, j, k) and (i, j, k+1) is non-matching.
 
-    Mirrors :func:`_faulted_pillar_mask_i` along the k axis (D-PR7-5).
+    Mirrors :func:`_faulted_pillar_mask_i` along the k axis.
     Cartesian + pinchout decks produce all-False (matching-Z);
     stair-stepped k-direction faults flip bits to True.
     """
@@ -716,8 +716,8 @@ def _faulted_pillar_mask_k(P: np.ndarray, actnum_3d: np.ndarray) -> np.ndarray:
 def _k_face_quads(P: np.ndarray) -> np.ndarray:
     """(NX, NY, NZ+1, 4) of node ids per k-plane face.
 
-    Same active-side picker as `_i_face_quads` / `_j_face_quads` (D-PR7-4
-    via D-PR6-4): reads both side columns and selects elementwise via
+    Same active-side picker as `_i_face_quads` / `_j_face_quads` (
+    via ): reads both side columns and selects elementwise via
     `np.where(vL == -1, vR, vL)`.
     """
     twonx, twony, twonz = P.shape
@@ -774,8 +774,8 @@ def find_k_faces(cube: CornerCube) -> Faces:
 class UnstructuredGrid:
     """Public unstructured mesh — nodes + faces + cells + properties.
 
-    Constructed by :func:`build_topology` (PR-7). Optionally enriched
-    with cell properties via :func:`attach_props` (PR-12), which
+    Constructed by :func:`build_topology`. Optionally enriched
+    with cell properties via :func:`attach_props`, which
     returns a NEW grid with the populated ``props`` dict.
 
     ``nodes`` carries the unique XYZ from ``CornerCube.nodes``; node ids
@@ -796,12 +796,12 @@ class UnstructuredGrid:
     cart_dims: tuple[int, int, int]
     # (Mnnc, 2) int64 — non-neighbour connections: cell-id pairs that are
     # connected without sharing a geometric face. Populated for cells
-    # bridged across a pinched-out layer (PR-12); empty (0, 2) otherwise.
+    # bridged across a pinched-out layer; empty (0, 2) otherwise.
     nnc: np.ndarray = field(default_factory=lambda: np.empty((0, 2), dtype=np.int64))
     # (Ncells,) int64 — connected-component label per cell over the face
     # + NNC adjacency. 0-based, assigned in order of first cell id, so a
     # single-component grid is all zeros. Use ``split()`` to materialise
-    # the components as independent grids (PR-14).
+    # the components as independent grids.
     component: np.ndarray = field(default_factory=lambda: np.empty((0,), dtype=np.int64))
     props: dict[str, np.ndarray] = field(default_factory=dict)
     _index_map: "IndexMap | None" = field(default=None, repr=False, compare=False)
@@ -827,7 +827,7 @@ class UnstructuredGrid:
         """Lazy-cached :class:`IndexMap` built from cart_dims + original_ijk.
 
         Frozen-dataclass cache: stored via ``object.__setattr__`` on
-        first access (D-PR12-1) — same pattern ``functools.cached_property``
+        first access — same pattern ``functools.cached_property``
         uses on frozen dataclasses.
         """
         from cpg2unstructured.index_map import IndexMap
@@ -900,7 +900,7 @@ class UnstructuredGrid:
 
 
 # Backward-compat type alias: existing code (e.g. cpg2unstructured.graph)
-# imports `_TopoMesh` for type hints. The class was renamed in PR-12
+# imports `_TopoMesh` for type hints. The class was renamed in 
 # without changing field shape — the alias keeps those imports working.
 _TopoMesh = UnstructuredGrid
 
@@ -910,11 +910,11 @@ def attach_props(grid: UnstructuredGrid, grdecl: "Grdecl") -> UnstructuredGrid:
     grid's order. Returns a NEW :class:`UnstructuredGrid` (frozen) with
     the populated ``props`` dict — the input grid is not mutated.
 
-    Active-cell filtering uses :attr:`IndexMap.linear_to_cell` (PR-9):
+    Active-cell filtering uses :attr:`IndexMap.linear_to_cell`:
     ``new_props[k] = grdecl.props[k][index_map.linear_to_cell].copy()``.
 
     Raises ``ValueError`` if ``grdecl.cart_dims`` differs from
-    ``grid.cart_dims``. Property dtypes are preserved (PR-4's whitelist
+    ``grid.cart_dims``. Property dtypes are preserved (an earlier whitelist
     classifies float vs int32 at parse time).
     """
     if grid.cart_dims != grdecl.cart_dims:
@@ -931,7 +931,7 @@ def _read_cell_corners_from_P(P: np.ndarray, nx: int, ny: int, nz: int) -> np.nd
     """Return (n_cells, 8) int64 of node ids per cell in Eclipse F-order.
 
     Cell `c = i + j*nx + k*nx*ny` (NX-fastest); corner ordering per
-    `_LOCAL_CORNERS` (D-PR7-6).
+    `_LOCAL_CORNERS`.
     """
     i_idx, j_idx, k_idx = np.meshgrid(
         np.arange(nx), np.arange(ny), np.arange(nz), indexing="ij"
@@ -949,12 +949,12 @@ def _read_cell_corners_from_P(P: np.ndarray, nx: int, ny: int, nz: int) -> np.nd
 def _real_cell_mask(cell_corners: np.ndarray) -> np.ndarray:
     """Return (n_cells,) bool — True iff every face has ≥ 3 unique node ids.
 
-    Per spec rationale (D-PR7-8): a cell is "zero-volume" when at least
+    Per spec rationale: a cell is "zero-volume" when at least
     one of its 6 faces collapses to fewer than 3 unique nodes (i.e.,
     the face degenerates from a quad to a line or point). Wedge cells
     with one coincident corner-pair (7 unique corners, two faces with
     3 unique nodes) survive — their topology is still valid.
-    Cells with all 8 corners equal to -1 (inactive in PR-5's
+    Cells with all 8 corners equal to -1 (inactive in an earlier
     sentinel-fill) have every face at 1 unique → caught here.
     """
     n_cells = cell_corners.shape[0]
@@ -1055,15 +1055,15 @@ def build_topology(cube: CornerCube) -> UnstructuredGrid:
     zero-volume cells, and rebuild contiguous cell ids.
 
     Returns the topology-only `_TopoMesh`. Geometry (centroids, areas,
-    volumes) lands in PR-8.
+    volumes) lands in 
     """
     nx, ny, nz = cube.cart_dims
     P = cube.P
     actnum_3d = cube.actnum_3d
     n_old = nx * ny * nz
 
-    # Phase 2-faults · PR-8: the top-level i/j fault guard is REMOVED
-    # — find_i_faces (PR-6) and find_j_faces (PR-7) now dispatch
+    # The top-level i/j fault guard is REMOVED
+    # — find_i_faces and find_j_faces now dispatch
     # matching vs faulted inline. k-direction faults still raise
     # downstream in find_k_faces (k-fault dispatch deferred to a
     # follow-up; the i/j-pair sweep-line algorithm does not directly
@@ -1158,7 +1158,7 @@ def build_topology(cube: CornerCube) -> UnstructuredGrid:
                     f"{merged_nb[u]} + {v}"
                 )
 
-    # First-occurrence direction (D-PR7-2).
+    # First-occurrence direction.
     merged_dir = all_dirs[first_idx]
 
     # Cell corners + real-cell mask (zero-volume detection).
@@ -1189,7 +1189,7 @@ def build_topology(cube: CornerCube) -> UnstructuredGrid:
         direction=merged_dir[face_keep],
     )
 
-    # Cell-faces inversion (D-PR7-7). Walk raw faces; assign each to the
+    # Cell-faces inversion. Walk raw faces; assign each to the
     # right slot of each adjacent cell.
     cell_faces_old = np.full((n_old, 6), -1, dtype=np.int64)
     for raw_id in range(all_quads.shape[0]):
@@ -1211,14 +1211,14 @@ def build_topology(cube: CornerCube) -> UnstructuredGrid:
     if (cell_faces_new == -1).any():
         raise RuntimeError("active+real cell has an unfilled face slot — bug")
 
-    # Eclipse-natural original_ijk (D-PR7-3) from F-order kept indices.
+    # Eclipse-natural original_ijk from F-order kept indices.
     kept_old_idx = np.where(keep_cells)[0]
     i_idx = kept_old_idx % nx
     j_idx = (kept_old_idx // nx) % ny
     k_idx = kept_old_idx // (nx * ny)
     original_ijk = np.stack([i_idx, j_idx, k_idx], axis=1).astype(np.int64)
 
-    # PR-12 — NNCs bridging the cells above/below each pinched-out layer.
+    #  — NNCs bridging the cells above/below each pinched-out layer.
     pinched_3d = cube.pinched_3d
     if pinched_3d is not None and pinched_3d.any():
         keep3 = keep_cells.reshape(nx, ny, nz, order="F")
@@ -1227,7 +1227,7 @@ def build_topology(cube: CornerCube) -> UnstructuredGrid:
     else:
         nnc = np.empty((0, 2), dtype=np.int64)
 
-    # PR-13 — connected-component labels over the face + NNC adjacency.
+    #  — connected-component labels over the face + NNC adjacency.
     component = _connected_components(n_new, nb_final, nnc)
 
     return UnstructuredGrid(

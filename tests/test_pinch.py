@@ -1,8 +1,8 @@
-"""PINCH detection + pinched-cell drop (PR-11 of phase 2-faults).
+"""PINCH detection + pinched-cell drop.
 
 A pinched-out cell has zero vertical thickness (top z-slot == bottom
 z-slot on all pillars). `from_grdecl` folds such cells out of the active
-set, so they drop from the topology exactly like ACTNUM=0 cells. PR-12
+set, so they drop from the topology exactly like ACTNUM=0 cells. 
 will bridge the cells above/below a pinch with an NNC.
 """
 from __future__ import annotations
@@ -66,7 +66,7 @@ def test_pinch_tol_threshold(fixtures):
     assert _pinched_cell_mask(g, tol=1.0).all()
 
 
-# ── PR-12: NNCs bridge cells across a pinched-out layer ─────────────
+# ──  NNCs bridge cells across a pinched-out layer ─────────────
 
 
 def test_pinch_creates_nnc(fixtures):

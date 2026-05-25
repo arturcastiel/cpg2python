@@ -38,7 +38,7 @@ def test_handedness_corner_far(cube_2x2x2):
 
 
 def test_coord_layout_offdiag_pillars_correct(cube_2x2x2):
-    # Defence test for D-PR5-3. Under the old buggy reshape these would
+    # Defence test for . Under the old buggy reshape these would
     # return swapped pillars (1,0,0) ↔ (0,1,0). Catches a layout regression
     # without needing a non-square fixture.
     n_10 = cube_2x2x2.nodes[cube_2x2x2.P[1, 0, 0]]

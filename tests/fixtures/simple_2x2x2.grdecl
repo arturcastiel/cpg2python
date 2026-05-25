@@ -1,4 +1,4 @@
--- Toy 2x2x2 cartesian deck for cpg2unstructured PR-3 tests
+-- Toy 2x2x2 cartesian deck for cpg2unstructured  tests
 SPECGRID
   2 2 2 1 F /
 

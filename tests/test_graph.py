@@ -29,7 +29,7 @@ def test_corner_to_corner_path_unit(mesh_2x2x2):
 
 
 def test_distance_weight_unit_cube(mesh_2x2x2):
-    # Real PR-8 centroids — each unit cube centred at (0.5+i, 0.5+j, 0.5+k).
+    # Real  centroids — each unit cube centred at (0.5+i, 0.5+j, 0.5+k).
     fg = face_geometry(mesh_2x2x2.nodes, mesh_2x2x2.faces,
                        mesh_2x2x2.cell_corners)
     cg = cell_geometry(mesh_2x2x2.nodes, mesh_2x2x2.faces,
@@ -47,7 +47,7 @@ def test_distance_weight_requires_centroids(mesh_2x2x2):
 
 
 def test_unknown_weights_mode_raises(mesh_2x2x2):
-    # D-PR10-4 defence: typo like "Unit" should NOT silently work.
+    #  defence: typo like "Unit" should NOT silently work.
     with pytest.raises(ValueError, match="unknown weights mode"):
         cell_adjacency(mesh_2x2x2, weights="Unit")   # type: ignore[arg-type]
 
