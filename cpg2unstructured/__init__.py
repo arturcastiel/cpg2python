@@ -25,6 +25,11 @@ from cpg2unstructured.graph import (
 )
 from cpg2unstructured.grdecl_reader import Grdecl, read_grdecl
 from cpg2unstructured.index_map import IndexMap
+from cpg2unstructured.planview import (
+    PLANE_AXES,
+    ProjectedTopology,
+    projected_topology,
+)
 from cpg2unstructured.unstructured import (
     Faces,
     UnstructuredGrid,
@@ -57,6 +62,9 @@ __all__ = [
     "face_geometry",
     "cell_geometry",
     "IndexMap",
+    "ProjectedTopology",
+    "projected_topology",
+    "PLANE_AXES",
     "cell_adjacency",
     "cell_adjacency_csgraph",
     "shortest_path",
