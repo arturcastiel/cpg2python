@@ -13,7 +13,13 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from cpg2unstructured.mesh3d import cell_centroids, face_areas, face_centroids
+from cpg2unstructured.mesh3d import (
+    cell_centroids,
+    face_areas,
+    face_centroids,
+    face_edges,
+    mesh_edges,
+)
 from cpg2unstructured.unstructured import UnstructuredGrid
 
 __all__ = [
@@ -22,6 +28,8 @@ __all__ = [
     "project_to_plane",
     "point_in_polygon",
     "planar_minimal_surface",
+    "boundary_edges",
+    "surface_boundary_loops",
 ]
 
 
@@ -117,3 +125,56 @@ def planar_minimal_surface(
         cell_ijk=cell_ijk.astype(np.int64, copy=False),
         direction=direction.astype(np.int8, copy=False),
     )
+
+
+def boundary_edges(grid: UnstructuredGrid, face_ids: np.ndarray) -> np.ndarray:
+    """Edge ids on the topological boundary of a face set (the ∂₂ rim).
+
+    An edge is on the rim iff it is incident to an ODD number of the selected
+    faces (interior edges are shared by an even number and cancel). Every
+    returned edge therefore belongs to at least one selected face — so a rim
+    derived this way is always contained in the surface.
+    """
+    fids = np.asarray(face_ids, dtype=np.int64)
+    if fids.size == 0:
+        return np.empty(0, dtype=np.int64)
+    counts = np.bincount(face_edges(grid)[fids].ravel())
+    return np.nonzero(counts % 2 == 1)[0].astype(np.int64)
+
+
+def surface_boundary_loops(grid: UnstructuredGrid, face_ids: np.ndarray) -> list[np.ndarray]:
+    """Order the ∂₂ rim of a face set into closed node-id loops.
+
+    Returns a list of arrays, each a closed loop (first id == last id). For a
+    simple disk surface this is a single loop. Edges are walked greedily;
+    branching (non-manifold) rims split into multiple loops.
+    """
+    odd = boundary_edges(grid, face_ids)
+    if odd.size == 0:
+        return []
+    pairs = mesh_edges(grid)[odd]
+    adj: dict[int, list[tuple[int, int]]] = {}
+    for i, (a, b) in enumerate(pairs):
+        adj.setdefault(int(a), []).append((int(b), i))
+        adj.setdefault(int(b), []).append((int(a), i))
+
+    used: set[int] = set()
+    loops: list[np.ndarray] = []
+    for start in list(adj):
+        if all(ei in used for _, ei in adj[start]):
+            continue
+        loop = [start]
+        cur = start
+        while True:
+            nxt = [(nb, ei) for nb, ei in adj[cur] if ei not in used]
+            if not nxt:
+                break
+            nb, ei = nxt[0]
+            used.add(ei)
+            loop.append(nb)
+            cur = nb
+            if cur == loop[0]:
+                break
+        if len(loop) > 1:
+            loops.append(np.asarray(loop, dtype=np.int64))
+    return loops

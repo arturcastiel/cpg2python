@@ -36,10 +36,12 @@ from cpg2unstructured.mesh3d import (
 )
 from cpg2unstructured.minimal_surface import (
     MinimalSurface,
+    boundary_edges,
     fit_plane,
     planar_minimal_surface,
     point_in_polygon,
     project_to_plane,
+    surface_boundary_loops,
 )
 from cpg2unstructured.planview import (
     PLANE_AXES,
@@ -93,6 +95,8 @@ __all__ = [
     "project_to_plane",
     "point_in_polygon",
     "planar_minimal_surface",
+    "boundary_edges",
+    "surface_boundary_loops",
     "cell_adjacency",
     "cell_adjacency_csgraph",
     "shortest_path",
