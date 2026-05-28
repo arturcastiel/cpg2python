@@ -34,6 +34,13 @@ from cpg2unstructured.mesh3d import (
     face_edges,
     mesh_edges,
 )
+from cpg2unstructured.minimal_surface import (
+    MinimalSurface,
+    fit_plane,
+    planar_minimal_surface,
+    point_in_polygon,
+    project_to_plane,
+)
 from cpg2unstructured.planview import (
     PLANE_AXES,
     ProjectedTopology,
@@ -81,6 +88,11 @@ __all__ = [
     "face_areas",
     "face_centroids",
     "cell_centroids",
+    "MinimalSurface",
+    "fit_plane",
+    "project_to_plane",
+    "point_in_polygon",
+    "planar_minimal_surface",
     "cell_adjacency",
     "cell_adjacency_csgraph",
     "shortest_path",
