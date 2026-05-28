@@ -25,6 +25,22 @@ from cpg2unstructured.graph import (
 )
 from cpg2unstructured.grdecl_reader import Grdecl, read_grdecl
 from cpg2unstructured.index_map import IndexMap
+from cpg2unstructured.mesh3d import (
+    Mesh3DGraph,
+    build_mesh_graph_3d,
+    cell_centroids,
+    face_areas,
+    face_centroids,
+    face_edges,
+    mesh_edges,
+)
+from cpg2unstructured.minimal_surface import (
+    MinimalSurface,
+    fit_plane,
+    planar_minimal_surface,
+    point_in_polygon,
+    project_to_plane,
+)
 from cpg2unstructured.planview import (
     PLANE_AXES,
     ProjectedTopology,
@@ -65,6 +81,18 @@ __all__ = [
     "ProjectedTopology",
     "projected_topology",
     "PLANE_AXES",
+    "Mesh3DGraph",
+    "build_mesh_graph_3d",
+    "mesh_edges",
+    "face_edges",
+    "face_areas",
+    "face_centroids",
+    "cell_centroids",
+    "MinimalSurface",
+    "fit_plane",
+    "project_to_plane",
+    "point_in_polygon",
+    "planar_minimal_surface",
     "cell_adjacency",
     "cell_adjacency_csgraph",
     "shortest_path",
