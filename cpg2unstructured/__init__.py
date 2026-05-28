@@ -28,6 +28,10 @@ from cpg2unstructured.index_map import IndexMap
 from cpg2unstructured.mesh3d import (
     Mesh3DGraph,
     build_mesh_graph_3d,
+    cell_centroids,
+    face_areas,
+    face_centroids,
+    face_edges,
     mesh_edges,
 )
 from cpg2unstructured.planview import (
@@ -73,6 +77,10 @@ __all__ = [
     "Mesh3DGraph",
     "build_mesh_graph_3d",
     "mesh_edges",
+    "face_edges",
+    "face_areas",
+    "face_centroids",
+    "cell_centroids",
     "cell_adjacency",
     "cell_adjacency_csgraph",
     "shortest_path",
