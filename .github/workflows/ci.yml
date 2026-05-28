@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, release-candidate]
   pull_request:
-    branches: [main]
+    branches: [main, release-candidate]
 
 # Opt all JavaScript actions into the Node 24 runtime ahead of the
 # 2026-06 forced migration — silences the Node-20 deprecation warning
