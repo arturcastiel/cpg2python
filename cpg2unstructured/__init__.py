@@ -25,6 +25,11 @@ from cpg2unstructured.graph import (
 )
 from cpg2unstructured.grdecl_reader import Grdecl, read_grdecl
 from cpg2unstructured.index_map import IndexMap
+from cpg2unstructured.mesh3d import (
+    Mesh3DGraph,
+    build_mesh_graph_3d,
+    mesh_edges,
+)
 from cpg2unstructured.planview import (
     PLANE_AXES,
     ProjectedTopology,
@@ -65,6 +70,9 @@ __all__ = [
     "ProjectedTopology",
     "projected_topology",
     "PLANE_AXES",
+    "Mesh3DGraph",
+    "build_mesh_graph_3d",
+    "mesh_edges",
     "cell_adjacency",
     "cell_adjacency_csgraph",
     "shortest_path",
