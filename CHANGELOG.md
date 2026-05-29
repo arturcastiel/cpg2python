@@ -13,6 +13,20 @@ Semantic Versioning.
 
 ### Added
 - Formal end-to-end tutorial, [`docs/TUTORIAL.md`](docs/TUTORIAL.md).
+- **2.5D plan-view topology** (`planview.py`): `projected_topology(grid, plane)`
+  collapses the grid onto an `xy`/`xz`/`yz` plane into nodes, edges, and
+  face→cell-index records.
+- **Full 3D mesh graph** (`mesh3d.py`): `build_mesh_graph_3d` (node-edge graph
+  over all hex edges + a 3D KD-tree, with node-to-node shortest paths) and
+  `mesh_edges`.
+- **Boundary operator ∂₂ + geometry** (`mesh3d.py`): `face_edges` (each face's 4
+  edges), `face_areas`, `face_centroids`, `cell_centroids`.
+- **Planar minimal surface** (`minimal_surface.py`): `planar_minimal_surface`
+  (least-area, hole-free cell-faces for a planar boundary), `fit_plane`,
+  `project_to_plane`, `point_in_polygon`.
+- **Surface boundary (∂₂ rim)** (`minimal_surface.py`): `boundary_edges` and
+  `surface_boundary_loops` — the topological boundary of a face set, contained
+  in the surface by construction.
 
 ## [0.2.0] — 2026-05-24
 
