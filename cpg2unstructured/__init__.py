@@ -45,6 +45,12 @@ from cpg2unstructured.minimal_surface import (
     project_to_plane,
     surface_boundary_loops,
 )
+from cpg2unstructured.prescribed_fill import (
+    BoundaryDoesNotBound,
+    fill_prescribed_boundary,
+    fill_with_seed,
+    gf2_solve_boundary,
+)
 from cpg2unstructured.planview import (
     PLANE_AXES,
     ProjectedTopology,
@@ -101,6 +107,10 @@ __all__ = [
     "boundary_edges",
     "boundary_chain",
     "surface_boundary_loops",
+    "fill_prescribed_boundary",
+    "fill_with_seed",
+    "gf2_solve_boundary",
+    "BoundaryDoesNotBound",
     "cell_adjacency",
     "cell_adjacency_csgraph",
     "shortest_path",
