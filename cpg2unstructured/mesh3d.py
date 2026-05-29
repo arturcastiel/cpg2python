@@ -24,6 +24,7 @@ __all__ = [
     "Mesh3DGraph",
     "build_mesh_graph_3d",
     "face_edges",
+    "oriented_face_edges",
     "face_areas",
     "face_centroids",
     "cell_centroids",
@@ -82,6 +83,37 @@ class Mesh3DGraph:
 
 _FACE_COMBOS = ((0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3))
 
+# Cyclic-order recovery for oriented ∂₂. ``faces.nodes`` is sorted by node id,
+# NOT in spatial cyclic order (see geometry.py). Among a quad's 6 node-pairs the
+# 4 sides are mesh edges and the 2 diagonals are not. Corner 0's diagonal partner
+# is the local position whose pair with 0 is NOT an edge; the boundary cycle is
+# then [0, side, opp, side]. Indexed by that diagonal partner (1, 2, or 3):
+_CYCLE_BY_OPP = np.array(
+    [
+        [0, 1, 2, 3],   # opp=0 — placeholder, never used
+        [0, 2, 1, 3],   # opp=1 — diagonal 0–1
+        [0, 1, 2, 3],   # opp=2 — diagonal 0–2
+        [0, 1, 3, 2],   # opp=3 — diagonal 0–3
+    ]
+)
+
+
+def _lookup_edge_ids(
+    edges: np.ndarray, keys: np.ndarray, nn: int
+) -> tuple[np.ndarray, np.ndarray]:
+    """Map encoded node-pair keys (lo*nn + hi) to ids into ``edges``.
+
+    Returns ``(ids, found)`` with the same shape as ``keys``. Positions whose key
+    is not a mesh edge get the sentinel id ``edges.shape[0]`` and ``found`` False.
+    """
+    edge_key = edges[:, 0].astype(np.int64) * nn + edges[:, 1]
+    order = np.argsort(edge_key)
+    sorted_key = edge_key[order]
+    pos = np.clip(np.searchsorted(sorted_key, keys), 0, sorted_key.size - 1)
+    found = sorted_key[pos] == keys
+    ids = np.where(found, order[pos], edges.shape[0])
+    return ids, found
+
 
 def face_edges(grid: UnstructuredGrid, edges: np.ndarray | None = None) -> np.ndarray:
     """Each face's 4 boundary edges as ids into the unique-edge list (∂₂).
@@ -93,28 +125,68 @@ def face_edges(grid: UnstructuredGrid, edges: np.ndarray | None = None) -> np.nd
     if edges is None:
         edges = mesh_edges(grid)
     fn = grid.faces.nodes
-    nf = fn.shape[0]
     nn = grid.nodes.shape[0]
 
     a = np.stack([fn[:, i] for i, _ in _FACE_COMBOS], axis=1).astype(np.int64)
     b = np.stack([fn[:, j] for _, j in _FACE_COMBOS], axis=1).astype(np.int64)
-    lo = np.minimum(a, b)
-    hi = np.maximum(a, b)
-    cand_key = lo * nn + hi                       # (Nf, 6)
+    cand_key = np.minimum(a, b) * nn + np.maximum(a, b)   # (Nf, 6)
 
-    edge_key = edges[:, 0].astype(np.int64) * nn + edges[:, 1]
-    order = np.argsort(edge_key)
-    sorted_key = edge_key[order]
-    pos = np.clip(np.searchsorted(sorted_key, cand_key), 0, sorted_key.size - 1)
-    found = sorted_key[pos] == cand_key           # (Nf, 6)
-    eid = np.where(found, order[pos], edges.shape[0])  # sentinel = E for "not an edge"
-
+    eid, found = _lookup_edge_ids(edges, cand_key, nn)
     if not (found.sum(axis=1) == 4).all():
         bad = int((found.sum(axis=1) != 4).sum())
         raise ValueError(f"{bad} face(s) did not resolve to exactly 4 edges")
 
     eid.sort(axis=1)
     return eid[:, :4].astype(np.int64, copy=False)
+
+
+def oriented_face_edges(
+    grid: UnstructuredGrid, edges: np.ndarray | None = None
+) -> tuple[np.ndarray, np.ndarray]:
+    """Signed ∂₂: each face's 4 boundary edges in CYCLIC order, with orientation.
+
+    Returns ``(edge_ids, signs)``, both (Nf, 4) and column-aligned. For face
+    ``f``, walking ``edge_ids[f]`` traverses the face boundary as a closed loop;
+    ``signs[f, k]`` is +1 when that edge is followed in ascending node order
+    (lo→hi) and −1 when followed hi→lo. Hence ``sign·(lo→hi)`` is the actual
+    directed boundary edge, and the four signed edges sum to a 1-cycle
+    (∂₁∂₂ = 0) for every face.
+
+    Unlike :func:`face_edges` (columns sorted by id, unsigned), the columns here
+    follow the boundary cycle so the signs are meaningful. The per-face cycle
+    direction is intrinsic (derived from the node-id ordering); making it
+    globally coherent across a surface is orientation propagation, done by the
+    caller — see the assembly step that unions per-patch fills.
+    """
+    if edges is None:
+        edges = mesh_edges(grid)
+    fn = grid.faces.nodes
+    nn = grid.nodes.shape[0]
+
+    # Which of the 6 node-pairs are real edges → locate corner 0's diagonal.
+    a = np.stack([fn[:, i] for i, _ in _FACE_COMBOS], axis=1).astype(np.int64)
+    b = np.stack([fn[:, j] for _, j in _FACE_COMBOS], axis=1).astype(np.int64)
+    cand_key = np.minimum(a, b) * nn + np.maximum(a, b)
+    _, found = _lookup_edge_ids(edges, cand_key, nn)
+    if not (found.sum(axis=1) == 4).all():
+        bad = int((found.sum(axis=1) != 4).sum())
+        raise ValueError(f"{bad} face(s) did not resolve to exactly 4 edges")
+
+    # Combos 0,1,2 are (0,1),(0,2),(0,3) → partners 1,2,3. Corner 0 lies on
+    # exactly one diagonal, so exactly one of these is not an edge; argmin picks
+    # that single False per row.
+    opp_pos = np.array([1, 2, 3])[np.argmin(found[:, [0, 1, 2]], axis=1)]
+    cyc = _CYCLE_BY_OPP[opp_pos]                          # (Nf, 4) local indices
+    ordered = np.take_along_axis(fn, cyc, axis=1).astype(np.int64)  # cyclic node ids
+
+    src = ordered
+    dst = np.roll(ordered, -1, axis=1)
+    key = np.minimum(src, dst) * nn + np.maximum(src, dst)
+    eid, found2 = _lookup_edge_ids(edges, key, nn)
+    if not found2.all():                                  # cyclic sides are all edges
+        raise ValueError("oriented_face_edges: a face side was not a mesh edge")
+    signs = np.where(src < dst, 1, -1).astype(np.int8)
+    return eid.astype(np.int64, copy=False), signs
 
 
 def _face_geometry(grid: UnstructuredGrid):
