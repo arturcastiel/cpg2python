@@ -33,9 +33,11 @@ from cpg2unstructured.mesh3d import (
     face_centroids,
     face_edges,
     mesh_edges,
+    oriented_face_edges,
 )
 from cpg2unstructured.minimal_surface import (
     MinimalSurface,
+    boundary_chain,
     boundary_edges,
     fit_plane,
     planar_minimal_surface,
@@ -87,6 +89,7 @@ __all__ = [
     "build_mesh_graph_3d",
     "mesh_edges",
     "face_edges",
+    "oriented_face_edges",
     "face_areas",
     "face_centroids",
     "cell_centroids",
@@ -96,6 +99,7 @@ __all__ = [
     "point_in_polygon",
     "planar_minimal_surface",
     "boundary_edges",
+    "boundary_chain",
     "surface_boundary_loops",
     "cell_adjacency",
     "cell_adjacency_csgraph",

@@ -19,6 +19,7 @@ from cpg2unstructured.mesh3d import (
     face_centroids,
     face_edges,
     mesh_edges,
+    oriented_face_edges,
 )
 from cpg2unstructured.unstructured import UnstructuredGrid
 
@@ -29,6 +30,7 @@ __all__ = [
     "point_in_polygon",
     "planar_minimal_surface",
     "boundary_edges",
+    "boundary_chain",
     "surface_boundary_loops",
 ]
 
@@ -140,6 +142,49 @@ def boundary_edges(grid: UnstructuredGrid, face_ids: np.ndarray) -> np.ndarray:
         return np.empty(0, dtype=np.int64)
     counts = np.bincount(face_edges(grid)[fids].ravel())
     return np.nonzero(counts % 2 == 1)[0].astype(np.int64)
+
+
+def boundary_chain(
+    grid: UnstructuredGrid,
+    face_ids: np.ndarray,
+    face_signs: np.ndarray | None = None,
+    edges: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Signed ∂₂ of a face set as an integer 1-chain (the oriented-ℤ rim).
+
+    Sums the oriented boundary edges (:func:`oriented_face_edges`) of the
+    selected faces in the canonical lo→hi edge basis. Returns ``(edge_ids,
+    coeffs)``: the edges with NONZERO net coefficient (ascending by id) and their
+    integer coefficients.
+
+    With every face at its intrinsic orientation (``face_signs=None`` ⇒ +1), and
+    a coherently oriented surface, an interior edge shared by two faces cancels to
+    0, a rim edge survives as ±1, and a FOLD (two faces covering an edge with the
+    same direction) shows up as ±2 — a signal the mod-2 :func:`boundary_edges`
+    would silently drop. Pass ``face_signs`` (±1 per face) to apply an external
+    orientation.
+
+    Regardless of orientation, the result is always a 1-cycle: ∂₁(boundary_chain)
+    = 0 (because each face's ∂₂ is a cycle and a sum of cycles is a cycle). Taking
+    the coefficients mod 2 reproduces :func:`boundary_edges` exactly.
+    """
+    fids = np.asarray(face_ids, dtype=np.int64)
+    if fids.size == 0:
+        return np.empty(0, dtype=np.int64), np.empty(0, dtype=np.int64)
+
+    eid_all, sign_all = oriented_face_edges(grid, edges)
+    eid = eid_all[fids]                                   # (M, 4)
+    sgn = sign_all[fids].astype(np.int64)                # (M, 4)
+    if face_signs is not None:
+        fs = np.asarray(face_signs, dtype=np.int64).reshape(-1, 1)
+        if fs.shape[0] != fids.shape[0]:
+            raise ValueError("face_signs must have one entry per face id")
+        sgn = sgn * fs
+
+    coeff = np.zeros(int(eid_all.max()) + 1, dtype=np.int64)
+    np.add.at(coeff, eid.ravel(), sgn.ravel())
+    nz = np.nonzero(coeff)[0]
+    return nz.astype(np.int64), coeff[nz]
 
 
 def surface_boundary_loops(grid: UnstructuredGrid, face_ids: np.ndarray) -> list[np.ndarray]:
