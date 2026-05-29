@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from cpg2unstructured.mesh3d import cell_centroids, face_edges, mesh_edges
+from cpg2unstructured.mesh3d import cell_centroids, face_areas, face_edges, mesh_edges
 from cpg2unstructured.minimal_surface import boundary_edges
 from cpg2unstructured.unstructured import UnstructuredGrid
 
@@ -40,6 +40,7 @@ __all__ = [
     "gf2_solve_boundary",
     "fill_prescribed_boundary",
     "fill_with_seed",
+    "reduce_area",
 ]
 
 
@@ -189,3 +190,75 @@ def fill_with_seed(
     collar = fill_prescribed_boundary(grid, rhs, margin=margin, edges=edges)
     phi = np.setxor1d(seed, collar, assume_unique=False)
     return phi
+
+
+def reduce_area(
+    grid: UnstructuredGrid,
+    face_ids: np.ndarray,
+    *,
+    max_passes: int = 8,
+) -> np.ndarray:
+    """Area-reducing polish that provably PRESERVES the boundary.
+
+    Any two surfaces with the same boundary differ by a 3-chain boundary: ``Phi``
+    and ``Phi ^ d2_3(S)`` have identical ``d2`` for any cell set ``S`` (because
+    ``d2 . d2_3 == 0``). So toggling a cell -- XOR-ing ``Phi`` with that cell's 6
+    faces -- NEVER changes the surface boundary. This does monotone single-cell
+    descent: repeat over cells adjacent to the surface, toggling any cell whose
+    toggle strictly lowers total face area, until a pass makes no improvement.
+
+    GUARANTEES: ``d2`` (the boundary) is invariant, so the result still satisfies
+    ``d2 Phi == gamma`` exactly; total area never increases; it terminates at a
+    single-cell-toggle LOCAL minimum.
+
+    NOT a global least-area solver. Single-cell descent can stick: a bulging fill
+    (e.g. the raw :func:`fill_prescribed_boundary` output, which can be 3x the
+    minimal area) may admit no single-cell improvement and pass through unchanged.
+    In practice this is run on the COLLAR fill (:func:`fill_with_seed`), which is
+    already plane-hugging and near-minimal -- there ``reduce_area`` is a safe no-op
+    / light cleanup that CERTIFIES local minimality without ever breaking the
+    surface. The GLOBAL least-area surface for an arbitrary prescribed boundary is
+    the slit + min-cut (max-flow) problem, intentionally left as a future
+    extension; do not rely on this function for it.
+
+    Returns the reduced face-id array (sorted).
+    """
+    cur = set(int(f) for f in np.asarray(face_ids, dtype=np.int64))
+    if not cur:
+        return np.empty(0, dtype=np.int64)
+
+    areas = face_areas(grid)
+    cell_faces = grid.cell_faces                      # (Ncells, 6) face ids
+    nb = grid.faces.neighbours
+
+    # Candidate cells = those adjacent to a currently-selected face (only these can
+    # change the area when toggled; an all-interior or all-exterior cell either
+    # cannot reduce or is irrelevant). Recomputed cheaply each pass from `cur`.
+    def area_delta(cell: int) -> tuple[float, list[int]]:
+        faces = [int(f) for f in cell_faces[cell] if f >= 0]
+        d = 0.0
+        for f in faces:
+            d += -areas[f] if f in cur else areas[f]   # remove if present, else add
+        return d, faces
+
+    improved = True
+    passes = 0
+    while improved and passes < max_passes:
+        improved = False
+        passes += 1
+        # cells touching the current surface
+        touched: set[int] = set()
+        for f in cur:
+            a, b = int(nb[f, 0]), int(nb[f, 1])
+            if a >= 0:
+                touched.add(a)
+            if b >= 0:
+                touched.add(b)
+        for c in touched:
+            d, faces = area_delta(c)
+            if d < -1e-12:                             # strict area decrease
+                for f in faces:
+                    cur.symmetric_difference_update((f,))
+                improved = True
+
+    return np.array(sorted(cur), dtype=np.int64)

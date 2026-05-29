@@ -50,6 +50,7 @@ from cpg2unstructured.prescribed_fill import (
     fill_prescribed_boundary,
     fill_with_seed,
     gf2_solve_boundary,
+    reduce_area,
 )
 from cpg2unstructured.planview import (
     PLANE_AXES,
@@ -110,6 +111,7 @@ __all__ = [
     "fill_prescribed_boundary",
     "fill_with_seed",
     "gf2_solve_boundary",
+    "reduce_area",
     "BoundaryDoesNotBound",
     "cell_adjacency",
     "cell_adjacency_csgraph",
