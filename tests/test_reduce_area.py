@@ -6,13 +6,34 @@ area. A bulging fill (bare GF(2) solve) should shrink toward the planar straddle
 """
 from __future__ import annotations
 
+import os
 import sys
+from pathlib import Path
 
 import numpy as np
 import pytest
 
-sys.path.insert(0, "/mnt/c/projects/library-development/fault-projections-benchmarks")
-from run_benchmarks import build_grid  # noqa: E402
+# fault-projections-benchmarks is a sibling repo on the developer's machine,
+# not installable from PyPI. Resolve via env override → sibling-of-repo →
+# legacy hard-coded path. Skip the module if the sibling isn't present
+# (typical in CI).
+_BENCH_ENV = os.environ.get("FAULT_PROJECTIONS_BENCHMARKS")
+_CANDIDATES = [
+    Path(_BENCH_ENV) if _BENCH_ENV else None,
+    Path(__file__).resolve().parent.parent.parent / "fault-projections-benchmarks",
+    Path("/mnt/c/projects/library-development/fault-projections-benchmarks"),
+]
+for _c in _CANDIDATES:
+    if _c is not None and _c.is_dir():
+        sys.path.insert(0, str(_c))
+        break
+
+run_benchmarks = pytest.importorskip(
+    "run_benchmarks",
+    reason="fault-projections-benchmarks sibling repo not available "
+    "(set FAULT_PROJECTIONS_BENCHMARKS=/path or place sibling-of-repo)",
+)
+build_grid = run_benchmarks.build_grid  # noqa: E402
 
 from cpg2unstructured import (  # noqa: E402
     boundary_chain,

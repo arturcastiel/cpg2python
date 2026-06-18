@@ -14,7 +14,11 @@ not just the simple matching-Z case.
 
 > **Scope.** A focused topology library — *any* CPG grid → an unstructured
 > representation. It is intentionally **not** a reservoir simulator (no
-> transmissibility, no property algebra, no `.EGRID`).
+> transmissibility, no property algebra).
+>
+> Reads both **ASCII GRDECL** decks and **binary EGRID** (`.EGRID` /
+> `.FEGRID`) files into the same `CornerPointGrid` pivot — every
+> downstream stage is format-agnostic.
 
 Python ≥ 3.10 · GNU GPL v3 · by Dr. Artur Castiel Reis de Souza
 
@@ -29,6 +33,35 @@ pip install -e .            # numpy-only
 pip install -e ".[fast]"    # + scipy.sparse for fast Dijkstra
 pip install -e ".[dev]"     # + pytest, pytest-cov, build
 ```
+
+## Grid input
+
+`cpg2unstructured` reads two corner-point grid formats into the same
+`CornerPointGrid` pivot dataclass; the rest of the pipeline doesn't care
+which reader produced it.
+
+| Format | Reader | Notes |
+|--------|--------|-------|
+| Text GRDECL (`.grdecl`)     | `read_grdecl(path)`                                              | `INCLUDE` recursion · PORO / PERMX / SATNUM pass-through |
+| Binary EGRID (`.EGRID` / `.FEGRID`) | `read_egrid(path, *, apply_mapaxes=True, dtype=np.float32)` | streams via [`resfo`](https://github.com/equinor/resfo); MAPAXES applied by default; LGR/NNC blocks skipped |
+
+```python
+from cpg2unstructured import read_grdecl, read_egrid, from_grdecl
+
+g = read_grdecl("model.grdecl")        # text deck
+g = read_egrid("MODEL.EGRID")          # binary EGRID, COORD/ZCORN as f32
+g = read_egrid("MODEL.EGRID", apply_mapaxes=False)   # raw LOCAL coords (warns)
+g = read_egrid("MODEL.EGRID", dtype=np.float64)      # widen on read
+
+cube = from_grdecl(g)                  # same downstream call for both readers
+```
+
+The legacy name `Grdecl` is a `TypeAlias` of `CornerPointGrid` — every
+existing `from cpg2unstructured import Grdecl` keeps working unchanged.
+See [`examples/read_egrid_demo.py`](examples/read_egrid_demo.py) for an
+end-to-end demo, and the `tests/test_egrid_*.py` modules for the full
+behavioural contract (MAPAXES, dtype, streaming short-circuit, hypothesis
+property test).
 
 ## Quickstart
 
@@ -114,7 +147,8 @@ grid.split()        # list[UnstructuredGrid] — one per component
 
 - **k-direction faults** raise `NonMatchingZError` (i/j fault dispatch only).
 - No transmissibility, well models, or property algebra.
-- ASCII GRDECL only — no binary `.EGRID`; no coordinate transforms / MAPAXES.
+- EGRID coverage: root grid only — LGR sub-grids and INIT/UNRST property
+  pass-through are explicit non-goals.
 - Single-process, in-memory.
 
 ## License & attribution
