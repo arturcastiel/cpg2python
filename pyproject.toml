@@ -21,11 +21,12 @@ classifiers = [
 ]
 dependencies = [
     "numpy>=1.24",
+    "resfo>=5,<6",
 ]
 
 [project.optional-dependencies]
 fast = ["scipy>=1.10"]
-dev  = ["pytest>=7", "pytest-cov>=4", "build"]
+dev  = ["pytest>=7", "pytest-cov>=4", "build", "hypothesis>=6"]
 
 [tool.setuptools.packages.find]
 where = ["."]
