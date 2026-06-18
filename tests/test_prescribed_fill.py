@@ -89,10 +89,33 @@ def test_bare_fill_exact_boundary_but_may_differ(mesh_3x3x2):
 
 @pytest.fixture
 def grid_6():
+    """Build the 8x8x8 demo grid via the sibling fault-projections-benchmarks repo.
+
+    Resolves the import path the same way as ``tests/test_reduce_area.py``:
+    env override → sibling-of-repo → legacy hard-coded path, then
+    ``pytest.importorskip`` if none resolves. CI environments without the
+    sibling repo skip the dependent tests cleanly.
+    """
+    import os
     import sys
-    sys.path.insert(0, "/mnt/c/projects/library-development/fault-projections-benchmarks")
-    from run_benchmarks import build_grid
-    return build_grid(8, 8, 8)
+    from pathlib import Path
+
+    bench_env = os.environ.get("FAULT_PROJECTIONS_BENCHMARKS")
+    candidates = [
+        Path(bench_env) if bench_env else None,
+        Path(__file__).resolve().parent.parent.parent / "fault-projections-benchmarks",
+        Path("/mnt/c/projects/library-development/fault-projections-benchmarks"),
+    ]
+    for c in candidates:
+        if c is not None and c.is_dir():
+            sys.path.insert(0, str(c))
+            break
+    run_benchmarks = pytest.importorskip(
+        "run_benchmarks",
+        reason="fault-projections-benchmarks sibling repo not available "
+        "(set FAULT_PROJECTIONS_BENCHMARKS=/path or place sibling-of-repo)",
+    )
+    return run_benchmarks.build_grid(8, 8, 8)
 
 
 @pytest.mark.parametrize("normal,u,v", [
