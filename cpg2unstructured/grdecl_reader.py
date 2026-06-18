@@ -18,6 +18,7 @@ from cpg2unstructured._errors import (
     GrdeclIncludeError,
     GrdeclSyntaxError,
 )
+from cpg2unstructured.corner_point import CornerPointGrid, Grdecl
 
 __all__ = ["read_grdecl", "Grdecl"]
 
@@ -33,26 +34,9 @@ _PROP_KEYWORDS_INT = frozenset({
 })
 
 
-@dataclass(frozen=True)
-class Grdecl:
-    """Parsed GRDECL deck."""
-
-    cart_dims: tuple[int, int, int]              # (NX, NY, NZ)
-    coord: np.ndarray                            # (n_pillars, 6)  float64
-    zcorn: np.ndarray                            # (8*NX*NY*NZ,)   float64
-    actnum: np.ndarray                           # (NX*NY*NZ,)     int8
-    props: dict[str, np.ndarray] = field(default_factory=dict)
-    unrecognized: list[str] = field(default_factory=list)
-
-    @property
-    def n_cells(self) -> int:
-        nx, ny, nz = self.cart_dims
-        return nx * ny * nz
-
-    @property
-    def n_pillars(self) -> int:
-        nx, ny, _ = self.cart_dims
-        return (nx + 1) * (ny + 1)
+# `Grdecl` (the dataclass) now lives in cpg2unstructured.corner_point as
+# `CornerPointGrid`. The name `Grdecl` is re-exported above as a TypeAlias.
+# Kept the import at top of file so all internal references resolve.
 
 
 def _tokenize(lines: Iterable[str]) -> Iterator[str]:
@@ -257,13 +241,14 @@ def _finalize(state: _State) -> Grdecl:
             )
         props[kw] = arr
 
-    return Grdecl(
+    return CornerPointGrid(
         cart_dims=cart_dims,
         coord=coord,
         zcorn=state.zcorn,
         actnum=actnum,
         props=props,
         unrecognized=state.unrecognized,
+        source="grdecl",
     )
 
 

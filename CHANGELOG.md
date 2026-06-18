@@ -6,6 +6,35 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+- **Binary EGRID reader** (`egrid_reader.py`): `read_egrid(path, *,
+  apply_mapaxes=True, dtype=np.float32) → CornerPointGrid`. Streams via
+  `resfo.lazy_read` and short-circuits on the wanted keyword set, so
+  LGR / NNC blocks are not materialised. MAPAXES rotation is applied
+  by default; opt out with `apply_mapaxes=False` and a `RuntimeWarning`
+  flags the choice.
+- **Format-agnostic pivot type** `CornerPointGrid` (`corner_point.py`).
+  Both `read_grdecl` and `read_egrid` return this type; downstream
+  consumers (`from_grdecl`, `CornerCube`, mesh3d, ...) are unchanged.
+  New fields: `mapaxes`, `mapaxes_applied`, `source` (`"grdecl"` /
+  `"egrid"`).
+- `resfo>=5,<6` promoted to a **hard dependency** — pure-Python on top of
+  numpy you already require. No `[egrid]` extra; `read_egrid` is a
+  first-class capability.
+- `examples/read_egrid_demo.py` — minimal EGRID-read demo.
+- `tests/data/_make_fixtures.py` (one-off generator) + committed fixtures
+  `cart_2x2x2.EGRID`, `cart_2x2x2_rotated.EGRID`, `cart_2x2x2_no_actnum.EGRID`.
+
+### Changed
+- `Grdecl` is now a `TypeAlias` of `CornerPointGrid` (back-compatible —
+  every existing import keeps working). The dataclass definition moved
+  from `grdecl_reader.py` to `corner_point.py`.
+- `read_grdecl` returns a `CornerPointGrid` (with `source="grdecl"`).
+- EGRID reader keeps the on-disk dtype (float32) by default; the
+  text-deck reader still returns float64.
+
+## [Unreleased — prior]
+
 ### Changed
 - Licensed under the **GNU GPL v3**. Portions of the grid-processing
   algorithms derive from MRST's GPLv3 `processGRDECL.m`; see `NOTICE`.
