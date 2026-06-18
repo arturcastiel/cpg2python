@@ -6,6 +6,22 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Documentation
+- README gained a **Grid input** section showing text-GRDECL vs binary
+  EGRID side by side (PR-102).
+- New `docs/grid-input.md` covering MAPAXES semantics, dtype trade-off,
+  streaming behaviour, error contract, and dep notes.
+- "EGRID is out of scope" line removed from the README's *Scope* and
+  *Limitations* sections.
+
+### Fixed
+- `tests/test_reduce_area.py` no longer hard-codes a developer-machine
+  path to `fault-projections-benchmarks`. It now looks up the sibling
+  via `$FAULT_PROJECTIONS_BENCHMARKS`, then a sibling-of-repo path, then
+  the legacy `/mnt/...` path, and uses `pytest.importorskip` if none
+  resolves. CI environments without the sibling repo cleanly skip the
+  module instead of erroring at collection.
+
 ### Added
 - **Binary EGRID reader** (`egrid_reader.py`): `read_egrid(path, *,
   apply_mapaxes=True, dtype=np.float32) → CornerPointGrid`. Streams via
