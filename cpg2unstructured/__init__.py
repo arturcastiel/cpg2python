@@ -10,7 +10,9 @@ from cpg2unstructured._errors import (
     GrdeclSyntaxError,
     NonMatchingZError,
 )
+from cpg2unstructured.corner_point import CornerPointGrid, Grdecl
 from cpg2unstructured.cpg import CornerCube, from_grdecl
+from cpg2unstructured.egrid_reader import read_egrid
 from cpg2unstructured.geometry import (
     CellGeometry,
     FaceGeometry,
@@ -23,7 +25,7 @@ from cpg2unstructured.graph import (
     shortest_path,
     shortest_path_fast,
 )
-from cpg2unstructured.grdecl_reader import Grdecl, read_grdecl
+from cpg2unstructured.grdecl_reader import read_grdecl
 from cpg2unstructured.index_map import IndexMap
 from cpg2unstructured.mesh3d import (
     Mesh3DGraph,
@@ -73,7 +75,9 @@ __version__ = "0.2.0"
 __all__ = [
     "__version__",
     "Grdecl",
+    "CornerPointGrid",
     "read_grdecl",
+    "read_egrid",
     "CornerCube",
     "from_grdecl",
     "Faces",
