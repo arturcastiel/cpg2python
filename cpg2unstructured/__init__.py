@@ -12,6 +12,13 @@ from cpg2unstructured._errors import (
 )
 from cpg2unstructured.corner_point import CornerPointGrid, Grdecl
 from cpg2unstructured.cpg import CornerCube, from_grdecl, pillar_of_node
+from cpg2unstructured.distortion import (
+    DistortionTerms,
+    cell_quads,
+    corner_jacobians,
+    distortion_energy,
+    shape_targets,
+)
 from cpg2unstructured.egrid_reader import read_egrid
 from cpg2unstructured.geometry import (
     CellGeometry,
@@ -71,6 +78,7 @@ from cpg2unstructured.planview import (
     ProjectedTopology,
     projected_topology,
 )
+from cpg2unstructured.polish import PolishReport, polish_lattice
 from cpg2unstructured.prescribed_fill import (
     BoundaryDoesNotBound,
     fill_prescribed_boundary,
@@ -128,6 +136,13 @@ __all__ = [
     "PillarTargets",
     "MorphResult",
     "morph_pillars",
+    "DistortionTerms",
+    "cell_quads",
+    "corner_jacobians",
+    "distortion_energy",
+    "shape_targets",
+    "PolishReport",
+    "polish_lattice",
     "elastic_stiffness",
     "stiffness_from_quality",
     "support_mask",
