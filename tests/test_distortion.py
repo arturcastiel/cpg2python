@@ -114,8 +114,8 @@ class TestGradients:
     @pytest.mark.parametrize(
         "terms",
         [DistortionTerms(1, 0, 0), DistortionTerms(0, 1, 0), DistortionTerms(0, 0, 1),
-         DistortionTerms(1, 0.35, 0.2)],
-        ids=["shape", "size", "shape_size", "mixed"],
+         DistortionTerms(0, 0, 0, 1), DistortionTerms(1, 0.35, 0.2, 0.7)],
+        ids=["shape", "size", "shape_size", "ortho", "mixed"],
     )
     @pytest.mark.parametrize("targets", [True, False], ids=["shape-targets", "identity"])
     def test_matches_finite_differences(self, terms, targets):
@@ -145,7 +145,51 @@ class TestGradients:
         assert checked > 15, "the perturbation was too small to test anything"
 
 
+class TestOrthogonality:
+    """The term taken from the elliptic-generation literature (Ryskin-Leal)."""
+
+    def test_an_unchanged_grid_scores_zero(self, setup):
+        P0, q, winv = setup
+        E, G = distortion_energy(P0, q, winv, DistortionTerms(0, 0, 0, 1.0))
+        assert E == pytest.approx(0.0, abs=1e-14)
+        assert np.abs(G).max() == pytest.approx(0.0, abs=1e-12)
+
+    def test_shearing_a_cell_costs_something(self, setup):
+        P0, q, winv = setup
+        P = P0.copy()
+        P[q[0, 3]] = P0[q[0, 3]] + np.array([40.0, 0.0])      # skew one corner
+        E, _ = distortion_energy(P, q, winv, DistortionTerms(0, 0, 0, 1.0))
+        assert E > 0.0
+
+    def test_it_is_scale_invariant(self, setup):
+        P0, q, winv = setup
+        rng = np.random.default_rng(4)
+        P = P0 + rng.normal(0, 5.0, P0.shape)
+        t = DistortionTerms(0, 0, 0, 1.0)
+        a, _ = distortion_energy(P, q, winv, t)
+        b, _ = distortion_energy(P * 2.5, q, winv, t)
+        assert b == pytest.approx(a, rel=1e-10)
+
+    def test_a_SHEARED_grid_is_not_penalised_for_being_sheared(self):
+        """Measured on T, not J — the distinction the whole term rests on.
+
+        An absolute orthogonality penalty would pull a sheared deck square,
+        "improving" the mesh by destroying the geometry it was built with.
+        """
+        i, j = np.meshgrid(np.arange(6), np.arange(6), indexing="ij")
+        P0 = np.stack([i * 100.0 + 0.35 * j * 100.0, j * 100.0],
+                      axis=-1).reshape(-1, 2)
+        q = cell_quads(6, 6)
+        winv = shape_targets(P0, q)
+        E_rel, _ = distortion_energy(P0, q, winv, DistortionTerms(0, 0, 0, 1.0))
+        assert E_rel == pytest.approx(0.0, abs=1e-14)
+        # against identity targets the same grid reads as heavily non-orthogonal
+        E_abs, _ = distortion_energy(P0, q, None, DistortionTerms(0, 0, 0, 1.0))
+        assert E_abs > 0.05
+
+
 class TestTerms:
     def test_no_active_terms_is_reported(self):
-        assert not DistortionTerms(0, 0, 0).any_active()
+        assert not DistortionTerms(0, 0, 0, 0).any_active()
         assert DistortionTerms(0, 0, 1).any_active()
+        assert DistortionTerms(0, 0, 0, 1).any_active()
