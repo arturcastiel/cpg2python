@@ -67,10 +67,15 @@ def cell_adjacency(
     n = mesh.cell_faces.shape[0]
     adj: list[list[tuple[int, float]]] = [[] for _ in range(n)]
 
+    # Bind the narrowed array once, outside the loop: the guard above already
+    # rejected weights="distance" with no centroids, but that correlation is
+    # invisible to a type checker across the two statements.
+    centroids = cell_centroids if weights == "distance" else None
+
     for a, b in inner:
         ia, ib = int(a), int(b)
-        if weights == "distance":
-            w = float(np.linalg.norm(cell_centroids[ia] - cell_centroids[ib]))
+        if centroids is not None:
+            w = float(np.linalg.norm(centroids[ia] - centroids[ib]))
         else:
             w = 1.0
         adj[ia].append((ib, w))
@@ -139,6 +144,25 @@ def _require_scipy() -> None:
         )
 
 
+def csgraph_indices(csr):
+    """Return ``csr`` with int32 index arrays, as scipy's csgraph requires.
+
+    ``csr_array((data, (rows, cols)))`` keeps whatever integer width ``rows`` and
+    ``cols`` had. Ours are int64 (node/cell ids), but ``scipy.sparse.csgraph``
+    is compiled against ``ITYPE = int32`` and rejects int64 indices outright:
+
+        ValueError: Buffer dtype mismatch, expected 'const int' but got 'long'
+
+    Casting is safe here — the index values are bounded by the node/cell count,
+    far below 2**31 for any grid this library handles. Done in place on a copy so
+    the caller's array is untouched.
+    """
+    out = csr.copy()
+    out.indices = out.indices.astype(np.int32, copy=False)
+    out.indptr = out.indptr.astype(np.int32, copy=False)
+    return out
+
+
 def cell_adjacency_csgraph(
     mesh: _TopoMesh,
     weights: WeightMode = "unit",
@@ -163,8 +187,11 @@ def cell_adjacency_csgraph(
     mask = (nb[:, 0] != -1) & (nb[:, 1] != -1)
     a = nb[mask, 0].astype(np.int64, copy=False)
     b = nb[mask, 1].astype(np.int64, copy=False)
-    if weights == "distance":
-        w = np.linalg.norm(cell_centroids[a] - cell_centroids[b], axis=1)
+    # See cell_adjacency: the guard above and this branch are correlated, but a
+    # type checker cannot see that, so bind the narrowed array explicitly.
+    centroids = cell_centroids if weights == "distance" else None
+    if centroids is not None:
+        w = np.linalg.norm(centroids[a] - centroids[b], axis=1)
     else:
         w = np.ones(a.shape[0], dtype=np.float64)
 
@@ -172,7 +199,7 @@ def cell_adjacency_csgraph(
     rows = np.concatenate([a, b])
     cols = np.concatenate([b, a])
     data = np.concatenate([w, w])
-    return _sp.csr_array((data, (rows, cols)), shape=(n, n))
+    return csgraph_indices(_sp.csr_array((data, (rows, cols)), shape=(n, n)))
 
 
 def shortest_path_fast(csr, src: int, dst: int | None = None):
