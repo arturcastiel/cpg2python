@@ -13,9 +13,9 @@ import pytest
 
 pytest.importorskip("hypothesis")
 
+import resfo
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
-import resfo
 
 from cpg2unstructured import read_egrid
 

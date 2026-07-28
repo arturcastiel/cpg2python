@@ -23,7 +23,6 @@ from cpg2unstructured import (
 )
 from cpg2unstructured._errors import NonMatchingZError
 
-
 # ── headline: build_topology on i-faulted deck ─────────────────────
 
 

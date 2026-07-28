@@ -10,13 +10,12 @@ pinched pillar) so failures localise quickly.
 """
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 
 import numpy as np
 import pytest
 
 from cpg2unstructured._fault_geometry import compute_face_geometry
-
 
 # ── helpers ─────────────────────────────────────────────────────────
 

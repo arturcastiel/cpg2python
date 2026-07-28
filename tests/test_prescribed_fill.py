@@ -129,8 +129,10 @@ def test_collar_fill_matches_boundary_on_planes(grid_6, normal, u, v):
     # hole-count is a property of planar_minimal_surface, not of the fill, so we
     # compare fill-holes to SEED-holes rather than asserting 0 (a tilted plane vs a
     # too-big footprint can give a seed with a hole; see the diagnostic).
-    n = np.asarray(normal, float); n /= np.linalg.norm(n)
-    uu = np.asarray(u, float); uu /= np.linalg.norm(uu)
+    n = np.asarray(normal, float)
+    n /= np.linalg.norm(n)
+    uu = np.asarray(u, float)
+    uu /= np.linalg.norm(uu)
     surf = _straddle(grid_6, [4, 4, 4], n, uu, v)
     if surf.face_ids.size == 0:
         pytest.skip("plane misses grid")
@@ -162,7 +164,7 @@ def test_collar_fill_watertight_on_axis_disk(grid_6):
 
 def test_non_bounding_gamma_raises(mesh_3x3x2):
     # An arbitrary non-cycle edge set: a single edge can't be a boundary.
-    E = mesh_edges(mesh_3x3x2)
+    mesh_edges(mesh_3x3x2)
     with pytest.raises(BoundaryDoesNotBound):
         fill_prescribed_boundary(mesh_3x3x2, np.array([0], np.int64), margin=9.0)
 

@@ -10,7 +10,6 @@ import pytest
 
 from cpg2unstructured._fault_geometry import line_intersection
 
-
 # ── Single-pair sanity ──────────────────────────────────────────────
 
 

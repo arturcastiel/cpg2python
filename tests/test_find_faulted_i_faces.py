@@ -19,7 +19,6 @@ from cpg2unstructured.unstructured import (
     _find_faulted_i_faces,
 )
 
-
 # ── matching-Z fixtures: should return empty Faces ──────────────────
 
 
