@@ -58,7 +58,11 @@ ignore = [
 "tests/*" = ["F401", "E402"]
 
 [tool.mypy]
-python_version = "3.10"
+# Analyse under 3.12, NOT the 3.10 runtime floor. numpy's bundled stubs use PEP 695
+# `type X = ...` statements, which only parse under 3.12+ — pinning mypy to 3.10 makes
+# it reject numpy/__init__.pyi outright and abort before checking our code. The 3.10
+# floor is a *runtime* guarantee and is enforced by the pytest matrix instead.
+python_version = "3.12"
 files = ["cpg2unstructured"]
 # Pragmatic baseline: catch real type errors in our own code without demanding
 # annotations on every helper. Tighten incrementally.
