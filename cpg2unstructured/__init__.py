@@ -11,7 +11,7 @@ from cpg2unstructured._errors import (
     NonMatchingZError,
 )
 from cpg2unstructured.corner_point import CornerPointGrid, Grdecl
-from cpg2unstructured.cpg import CornerCube, from_grdecl
+from cpg2unstructured.cpg import CornerCube, from_grdecl, pillar_of_node
 from cpg2unstructured.egrid_reader import read_egrid
 from cpg2unstructured.geometry import (
     CellGeometry,
@@ -22,10 +22,16 @@ from cpg2unstructured.geometry import (
 from cpg2unstructured.graph import (
     cell_adjacency,
     cell_adjacency_csgraph,
+    csgraph_indices,
     shortest_path,
     shortest_path_fast,
 )
 from cpg2unstructured.grdecl_reader import read_grdecl
+from cpg2unstructured.grdecl_writer import (
+    MapaxesNotInvertedError,
+    format_keyword,
+    write_grid_include,
+)
 from cpg2unstructured.index_map import IndexMap
 from cpg2unstructured.mesh3d import (
     Mesh3DGraph,
@@ -47,6 +53,19 @@ from cpg2unstructured.minimal_surface import (
     project_to_plane,
     surface_boundary_loops,
 )
+from cpg2unstructured.morph import (
+    MorphResult,
+    PillarTargets,
+    laplacian_matrix,
+    morph_pillars,
+)
+from cpg2unstructured.pillars import (
+    PillarLattice,
+    apply_displacement,
+    boundary_mask,
+    local_spacing,
+    pillar_lattice,
+)
 from cpg2unstructured.planview import (
     PLANE_AXES,
     ProjectedTopology,
@@ -59,6 +78,14 @@ from cpg2unstructured.prescribed_fill import (
     gf2_solve_boundary,
     reduce_area,
 )
+from cpg2unstructured.quality import (
+    QualityReport,
+    aspect_ratio,
+    cell_quality,
+    non_orthogonality,
+    scaled_jacobian,
+    skew,
+)
 from cpg2unstructured.unstructured import (
     Faces,
     UnstructuredGrid,
@@ -69,6 +96,13 @@ from cpg2unstructured.unstructured import (
     find_j_faces,
     find_k_faces,
 )
+from cpg2unstructured.validity import (
+    WELD_TOLERANCE,
+    ValidityReport,
+    check_validity,
+    column_signed_areas,
+    separation_violations,
+)
 
 __version__ = "0.2.0"
 
@@ -77,9 +111,39 @@ __all__ = [
     "Grdecl",
     "CornerPointGrid",
     "read_grdecl",
+    "write_grid_include",
+    "format_keyword",
+    "MapaxesNotInvertedError",
+    "PillarLattice",
+    "pillar_lattice",
+    "boundary_mask",
+    "local_spacing",
+    "apply_displacement",
+    "ValidityReport",
+    "check_validity",
+    "column_signed_areas",
+    "separation_violations",
+    "WELD_TOLERANCE",
+    "depth_crossings",
+    "PillarTargets",
+    "MorphResult",
+    "morph_pillars",
+    "elastic_stiffness",
+    "stiffness_from_quality",
+    "support_mask",
+    "cell_quality",
+    "QualityReport",
+    "scaled_jacobian",
+    "aspect_ratio",
+    "skew",
+    "non_orthogonality",
+    "corner_folds",
+    "proximity_violations",
+    "laplacian_matrix",
     "read_egrid",
     "CornerCube",
     "from_grdecl",
+    "pillar_of_node",
     "Faces",
     "find_i_faces",
     "find_j_faces",
@@ -118,6 +182,7 @@ __all__ = [
     "reduce_area",
     "BoundaryDoesNotBound",
     "cell_adjacency",
+    "csgraph_indices",
     "cell_adjacency_csgraph",
     "shortest_path",
     "shortest_path_fast",

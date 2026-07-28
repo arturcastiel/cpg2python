@@ -9,10 +9,17 @@ This is pure topology (numpy only) — no graph object and no spatial index.
 Those are cheap instantiations a consumer builds from this structure
 (``edges`` + ``edge_len`` → a weighted graph; ``nodes2d`` → a KD-tree).
 
-Scope: targets matching-Z / vertically-aligned pillars, where the 3D nodes
-of a column share identical in-plane coordinates and collapse exactly. A
-full-3D variant (slanted/faulted pillars, pillar-identity collapse) is
-future work.
+Two ways to decide which 3D nodes are "the same" in plan view:
+
+- **coordinate collapse** (default) — nodes sharing in-plane coordinates. Correct
+  only for vertically-aligned pillars. A tilted pillar's corners have different
+  ``(x, y)`` at every layer, so nothing collapses and the result is silently NOT a
+  plan view: measured on a 6x6x4 grid of 100 m cells, 5 m of tilt already produced
+  245 projected nodes where 49 were expected, with no error raised.
+- **pillar-identity collapse** — pass ``pillar_of_node`` (see
+  :func:`cpg2unstructured.cpg.pillar_of_node`) and nodes are grouped by the pillar
+  they belong to, whatever their coordinates. Correct for tilted and faulted
+  pillars, and the right choice for any real deck.
 """
 from __future__ import annotations
 
@@ -78,6 +85,7 @@ def projected_topology(
     plane: str = "xy",
     *,
     decimals: int | None = None,
+    pillar_of_node: np.ndarray | None = None,
 ) -> ProjectedTopology:
     """Project ``grid`` onto ``plane`` and return its in-plane topology.
 
@@ -104,14 +112,35 @@ def projected_topology(
             f"unknown plane: {plane!r}; expected one of {tuple(PLANE_AXES)}"
         ) from None
 
-    # 1. Projected nodes — collapse 3D nodes along the dropped axis.
+    # 1. Projected nodes — collapse the 3D nodes of each column into one.
     coords2d = grid.nodes[:, (u_ax, v_ax)]
-    key = coords2d if decimals is None else np.round(coords2d, decimals)
-    nodes2d, inverse = np.unique(key, axis=0, return_inverse=True)
-    node_of_grid_node = inverse.astype(np.int64, copy=False).ravel()
-    if decimals is not None:
-        # Report the rounded coordinates we actually deduplicated on.
-        nodes2d = nodes2d.astype(np.float64, copy=False)
+    if pillar_of_node is not None:
+        # IDENTITY collapse: nodes sharing a pillar are one projected node,
+        # whatever their coordinates. Correct for tilted pillars, where the
+        # coordinate collapse below silently stops collapsing anything.
+        pon = np.asarray(pillar_of_node, dtype=np.int64).ravel()
+        if pon.shape[0] != grid.nodes.shape[0]:
+            raise ValueError(
+                f"pillar_of_node must have one entry per node "
+                f"({grid.nodes.shape[0]}); got {pon.shape[0]}"
+            )
+        uniq, inverse = np.unique(pon, return_inverse=True)
+        node_of_grid_node = inverse.astype(np.int64, copy=False).ravel()
+        # representative position: the mean of the column's nodes
+        nodes2d = np.zeros((uniq.shape[0], 2), dtype=np.float64)
+        counts = np.zeros(uniq.shape[0], dtype=np.float64)
+        np.add.at(nodes2d, node_of_grid_node, coords2d)
+        np.add.at(counts, node_of_grid_node, 1.0)
+        nodes2d /= np.maximum(counts, 1.0)[:, None]
+    else:
+        key = coords2d if decimals is None else np.round(coords2d, decimals)
+        # Indexed rather than tuple-unpacked: mypy 2.3.0 crashes with an INTERNAL
+        # ERROR resolving the np.unique overload for `a, b = np.unique(..., axis=0,
+        # return_inverse=True)` against the numpy stubs CI installs. Local runs pass
+        # on the same mypy with an older numpy, so pinning either would only hide it.
+        collapsed = np.unique(key, axis=0, return_inverse=True)
+        nodes2d = np.asarray(collapsed[0], dtype=np.float64)
+        node_of_grid_node = np.asarray(collapsed[1]).astype(np.int64, copy=False).ravel()
 
     # 2. Select the lateral faces that lie in-plane (normal to a kept axis).
     fdir = grid.faces.direction
