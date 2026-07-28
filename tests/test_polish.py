@@ -185,3 +185,54 @@ class TestDegenerateCheck:
         strict = check_validity(pillar_lattice(r.grid), pillar_lattice(grid),
                                 min_scaled_jacobian=0.3)
         assert strict.ok, strict.summary()
+
+
+class TestPillarAlreadyOnTheFault:
+    """A pillar whose target IS its current position must be held there.
+
+    `normal_only` builds one fidelity row per pillar from the direction
+    `target - current`. When a pillar already sits on the fault that direction is
+    undefined, and zeroing it leaves an ALL-ZERO row: the pillar is constrained by
+    nothing and the smoothness term drags it off the fault it was already on.
+    """
+
+    @staticmethod
+    def _diag_targets(grid):
+        """A 45-degree trace through a square lattice hits pillars exactly."""
+        lat = pillar_lattice(grid)
+        nx1, ny1 = lat.shape
+        ij = np.array([(k, k) for k in range(min(nx1, ny1))], dtype=np.int64)
+        xy = lat.top[ij[:, 0], ij[:, 1]]
+        return PillarTargets(ij=ij, xy_top=xy.copy())      # target == current
+
+    def test_pillars_on_the_fault_are_not_dragged_off(self, grid):
+        t = self._diag_targets(grid)
+        r = morph_pillars(grid, t, w0=0.05, boundary="slide")
+        lat0, lat1 = pillar_lattice(grid), pillar_lattice(r.grid)
+        moved = np.linalg.norm(
+            lat1.top[t.ij[:, 0], t.ij[:, 1]] - lat0.top[t.ij[:, 0], t.ij[:, 1]], axis=1
+        )
+        assert moved.max() < 1e-6, f"a pillar already on the fault moved {moved.max()} m"
+
+    def test_the_grid_is_untouched_when_nothing_needs_to_move(self, grid):
+        """Every target already satisfied ⇒ the identity is the answer."""
+        t = self._diag_targets(grid)
+        r = morph_pillars(grid, t, w0=0.05, boundary="slide")
+        assert np.abs(r.d_top).max() < 1e-6
+        assert r.residuals.max() < 1e-6
+
+    def test_a_mix_of_satisfied_and_unsatisfied_targets(self, grid):
+        """The degenerate rows must not disturb the pillars that do need moving."""
+        lat = pillar_lattice(grid)
+        ij = np.array([(3, 3), (4, 4), (5, 5), (6, 6)], dtype=np.int64)
+        xy = lat.top[ij[:, 0], ij[:, 1]].copy()
+        xy[1] += np.array([25.0, 0.0])                     # one real request
+        t = PillarTargets(ij=ij, xy_top=xy)
+        r = morph_pillars(grid, t, w0=0.05, boundary="slide")
+        assert r.ok
+        lat1 = pillar_lattice(r.grid)
+        got = lat1.top[ij[:, 0], ij[:, 1]]
+        # the three satisfied pillars stay put, the fourth moves toward its target
+        assert np.linalg.norm(got[0] - xy[0]) < 2.0
+        assert np.linalg.norm(got[2] - xy[2]) < 2.0
+        assert np.linalg.norm(got[1] - lat.top[4, 4]) > 5.0

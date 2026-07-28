@@ -523,16 +523,38 @@ def _assemble(
         ln = np.linalg.norm(nrm, axis=1)
         safe = ln > 1e-14
         nrm[safe] /= ln[safe, None]
-        nrm[~safe] = 0.0
+
+        # A pillar ALREADY ON the fault has target == current, so this normal is
+        # undefined. Zeroing it — which is what a plain `nrm[~safe] = 0` does —
+        # leaves an all-zero fidelity row: the pillar is constrained by NOTHING and
+        # the smoothness term is free to drag it off the fault it was already on.
+        # Measured on a 45-degree trace through a 12x12 lattice, where the line
+        # passes exactly through 11 of the 25 claimed pillars: those 11 started at
+        # distance 0 and finished 51-52 m away, taking the case mean to 29.97 m.
+        #
+        # Such a pillar is at its target, so PIN it there — both components. That
+        # costs no tangential freedom worth having: the freedom exists to let a
+        # pillar slide to where it fits best, and this one is already there.
+        pinned = ~safe
         r = np.arange(len(flat))
-        F = sp.csr_array(
-            (
-                np.concatenate([np.sqrt(om) * nrm[:, 0], np.sqrt(om) * nrm[:, 1]]),
-                (np.concatenate([r, r]), np.concatenate([flat * 2, flat * 2 + 1])),
-            ),
-            shape=(len(flat), 2 * n),
-        )
+        data = [np.sqrt(om) * nrm[:, 0], np.sqrt(om) * nrm[:, 1]]
+        cols = [flat * 2, flat * 2 + 1]
+        idx = [r, r]
         b_fid = np.sqrt(om) * np.sum(rhs_xy * nrm, axis=1)
+        n_rows = len(flat)
+        if pinned.any():
+            k = np.nonzero(pinned)[0]
+            extra = np.arange(len(k)) + n_rows
+            # two rows each: x then y, both pinning the pillar to its target
+            data += [np.sqrt(om[k]), np.sqrt(om[k])]
+            cols += [flat[k] * 2, flat[k] * 2 + 1]
+            idx += [extra, extra + len(k)]
+            b_fid = np.concatenate([b_fid, rhs_xy[k, 0], rhs_xy[k, 1]])
+            n_rows += 2 * len(k)
+        F = sp.csr_array(
+            (np.concatenate(data), (np.concatenate(idx), np.concatenate(cols))),
+            shape=(n_rows, 2 * n),
+        )
     else:
         rows = np.arange(len(flat)) * 2
         F = sp.csr_array(
