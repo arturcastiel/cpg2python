@@ -24,6 +24,7 @@ from cpg2unstructured.corner_point import CornerPointGrid
 __all__ = [
     "PillarLattice",
     "pillar_lattice",
+    "active_columns",
     "boundary_mask",
     "local_spacing",
     "apply_displacement",
@@ -99,11 +100,18 @@ def pillar_lattice(grid: CornerPointGrid) -> PillarLattice:
     )
 
 
-def _active_columns(grid: CornerPointGrid) -> np.ndarray:
-    """``(NX, NY)`` bool — columns holding at least one active cell."""
+def active_columns(grid: CornerPointGrid) -> np.ndarray:
+    """``(NX, NY)`` bool — columns holding at least one active cell.
+
+    Public because validity needs it: a check that counts folds in columns holding
+    no cells is checking absent geometry. See ``check_validity(active=...)``.
+    """
     nx, ny, nz = grid.cart_dims
     actnum = np.asarray(grid.actnum).reshape(nz, ny, nx).transpose(2, 1, 0)
     return actnum.astype(bool).any(axis=2)
+
+
+_active_columns = active_columns   # pre-existing private name, kept working
 
 
 def boundary_mask(grid: CornerPointGrid, scope: str = "active") -> np.ndarray:
