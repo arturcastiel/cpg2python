@@ -11,7 +11,7 @@ from cpg2unstructured._errors import (
     NonMatchingZError,
 )
 from cpg2unstructured.corner_point import CornerPointGrid, Grdecl
-from cpg2unstructured.cpg import CornerCube, from_grdecl
+from cpg2unstructured.cpg import CornerCube, from_grdecl, pillar_of_node
 from cpg2unstructured.egrid_reader import read_egrid
 from cpg2unstructured.geometry import (
     CellGeometry,
@@ -143,6 +143,7 @@ __all__ = [
     "read_egrid",
     "CornerCube",
     "from_grdecl",
+    "pillar_of_node",
     "Faces",
     "find_i_faces",
     "find_j_faces",
