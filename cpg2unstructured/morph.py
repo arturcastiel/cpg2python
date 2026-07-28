@@ -59,7 +59,8 @@ from cpg2unstructured.pillars import (
 from cpg2unstructured.validity import ValidityReport, check_validity
 
 __all__ = ["PillarTargets", "MorphResult", "morph_pillars", "laplacian_matrix",
-           "elastic_stiffness", "stiffness_from_quality", "support_mask"]
+           "elastic_stiffness", "stiffness_from_quality", "stiffness_from_band",
+           "support_mask"]
 
 BOUNDARY_MODES = ("slide", "pinned", "free")
 
@@ -298,6 +299,43 @@ def elastic_stiffness(
     rows = np.repeat(dofs, 8, axis=1).ravel()
     cols = np.tile(dofs, (1, 8)).ravel()
     return sp.csr_array((Ke.ravel(), (rows, cols)), shape=(2 * n, 2 * n))
+
+
+def stiffness_from_band(
+    shape: tuple[int, int],
+    ij: np.ndarray,
+    *,
+    rings: int = 1,
+    softness: float = 0.02,
+) -> np.ndarray:
+    """``(NX, NY)`` stiffness that is SOFT at the fault and rigid away from it.
+
+    The sacrificial-band idea: rather than spreading distortion thinly over a wide
+    region — which leaves many cells mediocre — concentrate it deliberately in a
+    narrow band of cells along the fault, and let everything outside stay close to
+    its original shape.
+
+    Those band cells are expected to end up small and skewed. That is the trade:
+    they are sacrificed so their neighbours do not have to be. Quality is then
+    judged OUTSIDE the band, where it matters for the flow solution, and the band
+    itself is held only to the hard validity constraints — no folds, no welds.
+
+    ``softness`` is the band's modulus relative to the surrounding grid; 0.02 makes
+    the band 50x more compliant. ``rings`` sets its half-width in cells.
+
+    Contrast with :func:`stiffness_from_quality`, which stiffens cells that have
+    ALREADY gone bad. This one decides in advance which cells are allowed to.
+    """
+    nx1, ny1 = shape
+    node_band = support_mask(shape, ij, rings)
+    # a cell is in the band if any of its four corner pillars is
+    cell = (
+        node_band[:-1, :-1] | node_band[1:, :-1]
+        | node_band[1:, 1:] | node_band[:-1, 1:]
+    )
+    out = np.ones((nx1 - 1, ny1 - 1), dtype=np.float64)
+    out[cell] = float(softness)
+    return out
 
 
 def stiffness_from_quality(
@@ -616,6 +654,8 @@ def morph_pillars(
     stiffness: np.ndarray | None = None,
     stiffness_iterations: int = 0,
     stiffness_power: float = 1.0,
+    band_rings: int | None = None,
+    band_softness: float = 0.02,
     write_tol: float = 1e-9,
     min_fraction: float = 0.10,
     max_bisect: int = 20,
@@ -658,6 +698,15 @@ def morph_pillars(
         worst-cell tail. ``0`` (default) disables it.
     stiffness_power
         How aggressively bad cells are stiffened between those iterations.
+    band_rings
+        Enable the SACRIFICIAL BAND: cells within this many rings of the fault are
+        made compliant (``band_softness``) so they absorb the deformation, while the
+        rest of the grid stays near its original shape. Those band cells are expected
+        to be small and skewed — that is the point — so quality is judged outside the
+        band and the band is held only to the hard validity constraints.
+    band_softness
+        The band's modulus relative to the surrounding grid. Lower is softer;
+        0.02 makes the band 50x more compliant.
     support_rings
         Confine the morph to pillars within this many lattice rings of the targeted
         set; everything beyond is pinned. ``None`` (default) leaves the whole grid
@@ -676,6 +725,12 @@ def morph_pillars(
         if support_rings is not None and targets.n
         else None
     )
+    if band_rings is not None and targets.n:
+        # Sacrificial band: soften the cells at the fault so they absorb the
+        # deformation, leaving the surrounding grid close to its original shape.
+        stiffness = stiffness_from_band(
+            original.shape, targets.ij, rings=band_rings, softness=band_softness
+        )
 
     def attempt(w: float) -> tuple[MorphResult, PillarLattice]:
         d_top, d_bot = _solve_once(original, targets, h, w, bmask, boundary, free_mask, normal_only,
