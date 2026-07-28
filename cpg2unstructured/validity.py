@@ -30,6 +30,8 @@ __all__ = [
     "check_validity",
     "separation_violations",
     "depth_crossings",
+    "corner_folds",
+    "proximity_violations",
     "WELD_TOLERANCE",
 ]
 
@@ -82,6 +84,32 @@ def column_signed_areas(xy: np.ndarray) -> np.ndarray:
         + (p11[..., 0] * p01[..., 1] - p01[..., 0] * p11[..., 1])
         + (p01[..., 0] * p00[..., 1] - p00[..., 0] * p01[..., 1])
     )
+
+
+def corner_folds(xy: np.ndarray, xy0: np.ndarray) -> np.ndarray:
+    """``(NX, NY)`` bool — cells with a corner that has folded over.
+
+    Uses the PER-CORNER Jacobian sign, not the quad's total signed area. The
+    shoelace sum over a quad can stay positive while one corner turns inside out —
+    the other corners simply outweigh it — so an area-only test reports a valid
+    cell where a corner has inverted. Measured: a run reporting "0 folds" by signed
+    area had a scaled Jacobian of -0.23, i.e. a genuinely inverted cell.
+
+    A corner is folded when its cross product changes sign relative to the same
+    corner in the original grid.
+    """
+    from cpg2unstructured.quality import _corners, _cross
+
+    quad_now = list(_corners(xy))
+    quad_ref = list(_corners(xy0))
+    out = np.zeros(quad_now[0].shape[:2], dtype=bool)
+    for k in range(4):
+        cur_n, nxt_n, prv_n = quad_now[k], quad_now[(k + 1) % 4], quad_now[(k - 1) % 4]
+        cur_r, nxt_r, prv_r = quad_ref[k], quad_ref[(k + 1) % 4], quad_ref[(k - 1) % 4]
+        jn = _cross(nxt_n - cur_n, prv_n - cur_n)
+        jr = _cross(nxt_r - cur_r, prv_r - cur_r)
+        out |= (np.sign(jn) != np.sign(jr)) & (np.abs(jr) > 0)
+    return out
 
 
 def _folded(before: np.ndarray, after: np.ndarray, *, rel_tol: float = 1e-12) -> np.ndarray:
@@ -174,6 +202,45 @@ def depth_crossings(lattice: PillarLattice, *, tol: float = WELD_TOLERANCE) -> n
     return crossed
 
 
+def proximity_violations(
+    lattice: PillarLattice,
+    original: PillarLattice,
+    *,
+    min_fraction: float = 0.10,
+) -> np.ndarray:
+    """``(NX+1, NY+1)`` bool — pillars too close to ANY other pillar, not just neighbours.
+
+    :func:`separation_violations` only compares lattice-ADJACENT pairs, which misses
+    the shear mode: a band of cells can be flattened so that pillars two rows apart
+    nearly coincide while every adjacent pair stays comfortably separated. Measured
+    on the 12x12 example, adjacent pairs held at 18 m (of an original 100 m) while
+    pillars offset by (1,2) closed to 3.1 m — invisible to the adjacent-only test.
+
+    Uses a KD-tree, so this stays cheap at field scale (Norne: 5,311 pillars).
+    """
+    from scipy.spatial import cKDTree
+
+    shape = lattice.shape
+    bad = np.zeros(shape, dtype=bool)
+    h = local_spacing(original)
+    radius = float(min_fraction * np.mean(h))
+    if radius <= 0:
+        return bad
+
+    for plane in (lattice.top, lattice.bot):
+        flat = plane.reshape(-1, 2)
+        pairs = cKDTree(flat).query_pairs(radius, output_type="ndarray")
+        if pairs.size == 0:
+            continue
+        ia, ja = np.divmod(pairs[:, 0], shape[1])
+        ib, jb = np.divmod(pairs[:, 1], shape[1])
+        # adjacent pairs are separation_violations' business; report the rest
+        far = (np.abs(ia - ib) + np.abs(ja - jb)) > 1
+        bad[ia[far], ja[far]] = True
+        bad[ib[far], jb[far]] = True
+    return bad
+
+
 def check_validity(
     candidate: PillarLattice,
     original: PillarLattice,
@@ -185,12 +252,14 @@ def check_validity(
     Checks the signed-area sign at BOTH the top and bottom planes (independent once
     pillars are slanted), plus weld and separation guards.
     """
+    # Signed-area sign flip catches whole-cell inversion; corner_folds catches the
+    # single-corner fold an area sum can hide. Both are needed.
     folded_top = _folded(
         column_signed_areas(original.top), column_signed_areas(candidate.top)
-    )
+    ) | corner_folds(candidate.top, original.top)
     folded_bot = _folded(
         column_signed_areas(original.bot), column_signed_areas(candidate.bot)
-    )
+    ) | corner_folds(candidate.bot, original.bot)
     welded, too_close = separation_violations(
         candidate, original, min_fraction=min_fraction
     )
@@ -198,6 +267,10 @@ def check_validity(
     # invisible to either plane's signed area on its own.
     crossed = depth_crossings(candidate)
     welded = welded | crossed
+    # Non-adjacent proximity — the shear mode the adjacent-only test cannot see.
+    too_close = too_close | proximity_violations(
+        candidate, original, min_fraction=min_fraction
+    )
     n_folded = int(folded_top.sum() + folded_bot.sum())
     n_welded = int(welded.sum())
     n_too_close = int(too_close.sum())

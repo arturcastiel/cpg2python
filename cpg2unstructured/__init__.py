@@ -78,6 +78,14 @@ from cpg2unstructured.prescribed_fill import (
     gf2_solve_boundary,
     reduce_area,
 )
+from cpg2unstructured.quality import (
+    QualityReport,
+    aspect_ratio,
+    cell_quality,
+    non_orthogonality,
+    scaled_jacobian,
+    skew,
+)
 from cpg2unstructured.unstructured import (
     Faces,
     UnstructuredGrid,
@@ -120,6 +128,17 @@ __all__ = [
     "PillarTargets",
     "MorphResult",
     "morph_pillars",
+    "elastic_stiffness",
+    "stiffness_from_quality",
+    "support_mask",
+    "cell_quality",
+    "QualityReport",
+    "scaled_jacobian",
+    "aspect_ratio",
+    "skew",
+    "non_orthogonality",
+    "corner_folds",
+    "proximity_violations",
     "laplacian_matrix",
     "read_egrid",
     "CornerCube",

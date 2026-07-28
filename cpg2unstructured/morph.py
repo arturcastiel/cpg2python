@@ -58,7 +58,8 @@ from cpg2unstructured.pillars import (
 )
 from cpg2unstructured.validity import ValidityReport, check_validity
 
-__all__ = ["PillarTargets", "MorphResult", "morph_pillars", "laplacian_matrix"]
+__all__ = ["PillarTargets", "MorphResult", "morph_pillars", "laplacian_matrix",
+           "elastic_stiffness", "stiffness_from_quality", "support_mask"]
 
 BOUNDARY_MODES = ("slide", "pinned", "free")
 
@@ -201,6 +202,155 @@ def laplacian_matrix(nx1: int, ny1: int, xy: np.ndarray | None = None) -> sp.csr
     return (deg - adj).tocsr()
 
 
+def elastic_stiffness(
+    xy: np.ndarray,
+    *,
+    poisson: float = 0.3,
+    stiffness: np.ndarray | None = None,
+) -> sp.csr_array:
+    """Plane-stress linear-elasticity stiffness over the pillar lattice (Q1 elements).
+
+    The Laplacian smoothness term penalises the GRADIENT of the displacement, which
+    resists stretching but is nearly blind to SHEAR — the x and y components never
+    talk to each other. That is why a diagonal fault through an axis-aligned grid
+    produced skewed cells and 70-85 degree non-orthogonality no matter how the
+    weight was tuned.
+
+    Linear elasticity couples the components through the ``(λ+μ)∇(∇·u)`` term, so
+    shearing a cell costs energy directly. The grid deforms like a sheet of rubber
+    rather than like two independent scalar fields, which is the behaviour wanted
+    when a fault drags one part of the mesh past another.
+
+    Nothing about the CPG structure changes: same pillars, same topology, same
+    ``(NX+1, NY+1)`` lattice — only the quadratic form being minimised.
+
+    Parameters
+    ----------
+    xy
+        ``(NX+1, NY+1, 2)`` pillar positions; element geometry comes from these.
+    poisson
+        Poisson's ratio. Higher values resist area change more strongly; 0.3 is a
+        reasonable default for morphing, 0.0 leaves cells free to change area.
+    stiffness
+        Optional ``(NX, NY)`` per-cell Young's modulus. Raising it on cells that are
+        already distorted pushes deformation into cells that can absorb it — the
+        iterated-stiffness idea — without touching the topology.
+    """
+    nx1, ny1, _ = xy.shape
+    ncx, ncy = nx1 - 1, ny1 - 1
+    n = nx1 * ny1
+    idx = np.arange(n).reshape(nx1, ny1)
+
+    # element corner node ids, counter-clockwise
+    e = np.stack([
+        idx[:-1, :-1].ravel(), idx[1:, :-1].ravel(),
+        idx[1:, 1:].ravel(), idx[:-1, 1:].ravel(),
+    ], axis=1)                                            # (Ne, 4)
+    xe = np.stack([
+        xy[:-1, :-1], xy[1:, :-1], xy[1:, 1:], xy[:-1, 1:],
+    ], axis=2).reshape(-1, 4, 2)                          # (Ne, 4, 2)
+
+    E = (np.ones(ncx * ncy) if stiffness is None
+         else np.asarray(stiffness, float).ravel())
+    nu = float(poisson)
+    # plane stress constitutive matrix, per unit E
+    D0 = np.array([[1.0, nu, 0.0],
+                   [nu, 1.0, 0.0],
+                   [0.0, 0.0, (1.0 - nu) / 2.0]]) / (1.0 - nu * nu)
+
+    g = 1.0 / np.sqrt(3.0)
+    gauss = [(-g, -g), (g, -g), (g, g), (-g, g)]
+    Ke = np.zeros((xe.shape[0], 8, 8))
+    for xi, eta in gauss:
+        dN = np.array([
+            [-(1 - eta), (1 - eta), (1 + eta), -(1 + eta)],
+            [-(1 - xi), -(1 + xi), (1 + xi), (1 - xi)],
+        ]) / 4.0                                          # (2, 4)
+        J = np.einsum("ij,njk->nik", dN, xe)              # (Ne, 2, 2)
+        detJ = J[:, 0, 0] * J[:, 1, 1] - J[:, 0, 1] * J[:, 1, 0]
+        detJ = np.where(np.abs(detJ) < 1e-300, 1e-300, detJ)
+        Jinv = np.empty_like(J)
+        Jinv[:, 0, 0] = J[:, 1, 1] / detJ
+        Jinv[:, 1, 1] = J[:, 0, 0] / detJ
+        Jinv[:, 0, 1] = -J[:, 0, 1] / detJ
+        Jinv[:, 1, 0] = -J[:, 1, 0] / detJ
+        dNxy = np.einsum("nij,jk->nik", Jinv, dN)         # (Ne, 2, 4)
+
+        B = np.zeros((xe.shape[0], 3, 8))
+        B[:, 0, 0::2] = dNxy[:, 0, :]
+        B[:, 1, 1::2] = dNxy[:, 1, :]
+        B[:, 2, 0::2] = dNxy[:, 1, :]
+        B[:, 2, 1::2] = dNxy[:, 0, :]
+        Ke += (E * np.abs(detJ))[:, None, None] * np.einsum(
+            "nki,kl,nlj->nij", B, D0, B)
+
+    # Normalise so `w` means the same thing for both operators. Element stiffness
+    # carries a factor |detJ| — cell AREA, ~1e4 for 100 m cells — while the
+    # Laplacian's entries are O(1). Without this the same w over-smooths the
+    # elastic solve by orders of magnitude and fidelity collapses.
+    scale = float(np.mean(np.abs(Ke.diagonal(axis1=1, axis2=2))))
+    if scale > 0:
+        Ke /= scale
+
+    dofs = np.empty((e.shape[0], 8), dtype=np.int64)
+    dofs[:, 0::2] = e * 2
+    dofs[:, 1::2] = e * 2 + 1
+    rows = np.repeat(dofs, 8, axis=1).ravel()
+    cols = np.tile(dofs, (1, 8)).ravel()
+    return sp.csr_array((Ke.ravel(), (rows, cols)), shape=(2 * n, 2 * n))
+
+
+def stiffness_from_quality(
+    lattice: PillarLattice,
+    *,
+    power: float = 1.0,
+    floor: float = 0.05,
+    plane: str = "top",
+) -> np.ndarray:
+    """``(NX, NY)`` per-cell stiffness that rises as cell quality falls.
+
+    ``E_cell = 1 / max(scaled_jacobian, floor) ** power``
+
+    Feeding this back into :func:`elastic_stiffness` makes already-distorted cells
+    RIGID, so the next solve pushes deformation into cells that still have shape to
+    give. Iterating this is the standard way to even out a morph's worst tail
+    without changing the grid's topology: nothing moves in the CPG structure, the
+    material just becomes non-uniform.
+
+    ``power`` controls aggressiveness — 0 disables it, 1 is gentle, 2+ strongly
+    protects bad cells. ``floor`` stops a near-degenerate cell producing an
+    unbounded modulus.
+    """
+    from cpg2unstructured.quality import scaled_jacobian
+
+    xy = lattice.top if plane == "top" else lattice.bot
+    sj = np.clip(scaled_jacobian(xy), floor, None)
+    return (1.0 / sj) ** float(power)
+
+
+def support_mask(shape: tuple[int, int], ij: np.ndarray, rings: int) -> np.ndarray:
+    """``(NX+1, NY+1)`` bool — pillars within ``rings`` lattice steps of ``ij``.
+
+    A dilation of the targeted set over the 4-neighbourhood. Used to confine a morph
+    to the fault's neighbourhood: everything outside is pinned, so the deck diff and
+    any distortion stay local and the rest of the grid is byte-identical.
+
+    ``rings=0`` frees only the targeted pillars themselves — the sharpest possible
+    change, and the one most likely to fold, since their immediate neighbours cannot
+    give way at all.
+    """
+    m = np.zeros(shape, dtype=bool)
+    m[ij[:, 0], ij[:, 1]] = True
+    for _ in range(max(int(rings), 0)):
+        g = m.copy()
+        g[:-1, :] |= m[1:, :]
+        g[1:, :] |= m[:-1, :]
+        g[:, :-1] |= m[:, 1:]
+        g[:, 1:] |= m[:, :-1]
+        m = g
+    return m
+
+
 def _rim_tangents(mask: np.ndarray) -> np.ndarray:
     """Unit tangent along the boundary at each rim pillar; zero where ill-defined.
 
@@ -237,6 +387,7 @@ def _reduction(
     shape: tuple[int, int],
     bmask: np.ndarray,
     mode: str,
+    free_mask: np.ndarray | None = None,
 ) -> sp.csr_array:
     """Map free DOFs to the full ``2N`` displacement vector.
 
@@ -257,6 +408,8 @@ def _reduction(
 
     for p in range(n_pillars):
         i, j = divmod(p, ny1)
+        if free_mask is not None and not free_mask[i, j]:
+            continue                                # outside the support: pinned
         on_rim = bool(bmask[i, j])
         if not on_rim or mode == "free":
             for k in (0, 1):
@@ -286,6 +439,11 @@ def _assemble(
     w: float,
     bmask: np.ndarray,
     mode: str,
+    free_mask: np.ndarray | None = None,
+    normal_only: bool = True,
+    smoothness: str = "laplacian",
+    poisson: float = 0.3,
+    stiffness: np.ndarray | None = None,
 ):
     """Build the reduced normal equations for one endpoint plane."""
     nx1, ny1 = lattice.shape
@@ -304,30 +462,62 @@ def _assemble(
     # and the Laplacian then couples quantities that are not comparable — which on
     # a graded grid is the difference between a 13.5% and a usable result.
     hbar = float(np.mean(h))
-    rhs_xy = (tgt - xy[targets.ij[:, 0], targets.ij[:, 1]]) / hbar
-    rows = np.repeat(np.arange(len(flat)) * 2, 1)
-    F = sp.csr_array(
-        (
-            np.concatenate([np.sqrt(om), np.sqrt(om)]),
-            (
-                np.concatenate([rows, rows + 1]),
-                np.concatenate([flat * 2, flat * 2 + 1]),
-            ),
-        ),
-        shape=(2 * len(flat), 2 * n),
-    )
-    b_fid = np.empty(2 * len(flat))
-    b_fid[0::2] = np.sqrt(om) * rhs_xy[:, 0]
-    b_fid[1::2] = np.sqrt(om) * rhs_xy[:, 1]
+    here = xy[targets.ij[:, 0], targets.ij[:, 1]]
+    rhs_xy = (tgt - here) / hbar
 
-    L = laplacian_matrix(nx1, ny1, xy)
-    L2 = sp.block_diag([L, L], format="csr")
-    # interleave (x0,y0,x1,y1,...) rather than block [all x | all y]
-    perm = np.empty(2 * n, dtype=np.int64)
-    perm[0::2] = np.arange(n)
-    perm[1::2] = np.arange(n) + n
-    P = sp.csr_array((np.ones(2 * n), (np.arange(2 * n), perm)), shape=(2 * n, 2 * n))
-    L2 = P @ L2 @ P.T
+    if normal_only:
+        # ONE equation per incidence: only the component of the offset ALONG the
+        # target's own normal is constrained, leaving the tangential position free.
+        #
+        # Pinning both components fixes the pillar to an exact POINT, but the
+        # requirement is only that it lie ON the line. The extra equation removes
+        # the freedom the solver needs to redistribute pillars along the fault, and
+        # that freedom is what keeps cells well shaped: over-constraining shows up
+        # directly as shear, skew and non-orthogonality.
+        nrm = rhs_xy.copy()
+        ln = np.linalg.norm(nrm, axis=1)
+        safe = ln > 1e-14
+        nrm[safe] /= ln[safe, None]
+        nrm[~safe] = 0.0
+        r = np.arange(len(flat))
+        F = sp.csr_array(
+            (
+                np.concatenate([np.sqrt(om) * nrm[:, 0], np.sqrt(om) * nrm[:, 1]]),
+                (np.concatenate([r, r]), np.concatenate([flat * 2, flat * 2 + 1])),
+            ),
+            shape=(len(flat), 2 * n),
+        )
+        b_fid = np.sqrt(om) * np.sum(rhs_xy * nrm, axis=1)
+    else:
+        rows = np.arange(len(flat)) * 2
+        F = sp.csr_array(
+            (
+                np.concatenate([np.sqrt(om), np.sqrt(om)]),
+                (
+                    np.concatenate([rows, rows + 1]),
+                    np.concatenate([flat * 2, flat * 2 + 1]),
+                ),
+            ),
+            shape=(2 * len(flat), 2 * n),
+        )
+        b_fid = np.empty(2 * len(flat))
+        b_fid[0::2] = np.sqrt(om) * rhs_xy[:, 0]
+        b_fid[1::2] = np.sqrt(om) * rhs_xy[:, 1]
+
+    if smoothness == "elastic":
+        # Couples the x and y components, so shearing a cell costs energy — the
+        # Laplacian cannot see shear at all.
+        L2 = elastic_stiffness(xy, poisson=poisson, stiffness=stiffness)
+    else:
+        L = laplacian_matrix(nx1, ny1, xy)
+        L2 = sp.block_diag([L, L], format="csr")
+        # interleave (x0,y0,x1,y1,...) rather than block [all x | all y]
+        perm = np.empty(2 * n, dtype=np.int64)
+        perm[0::2] = np.arange(n)
+        perm[1::2] = np.arange(n) + n
+        P = sp.csr_array((np.ones(2 * n), (np.arange(2 * n), perm)),
+                         shape=(2 * n, 2 * n))
+        L2 = P @ L2 @ P.T
 
     # Smoothness as the DIRICHLET ENERGY d^T L d — the sum over lattice edges of
     # c_jk‖d_j − d_k‖² — not ‖L d‖².
@@ -345,7 +535,7 @@ def _assemble(
     A = (F.T @ F) / m + (w / n) * L2
     b = (F.T @ b_fid) / m
 
-    R = _reduction(n, (nx1, ny1), bmask, mode)
+    R = _reduction(n, (nx1, ny1), bmask, mode, free_mask)
     Ar = (R.T @ A @ R).tocsc()
     br = R.T @ b
     return Ar, br, R, hbar, tgt
@@ -358,13 +548,19 @@ def _solve_once(
     w: float,
     bmask: np.ndarray,
     mode: str,
+    free_mask: np.ndarray | None = None,
+    normal_only: bool = True,
+    smoothness: str = "laplacian",
+    poisson: float = 0.3,
+    stiffness: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Solve for (d_top, d_bot) in model units at one value of ``w``."""
     nx1, ny1 = lattice.shape
     out = []
     planes = ("top",) if targets.is_rigid else ("top", "bot")
     for which in planes:
-        Ar, br, R, hbar, _ = _assemble(lattice, targets, which, h, w, bmask, mode)
+        Ar, br, R, hbar, _ = _assemble(lattice, targets, which, h, w, bmask, mode, free_mask, normal_only,
+                  smoothness, poisson, stiffness)
         # tiny Tikhonov term keeps the system non-singular when a mode leaves a
         # free component wholly unconstrained (e.g. free boundary, no targets)
         Ar = Ar + sp.eye_array(Ar.shape[0], format="csc") * 1e-12
@@ -377,12 +573,33 @@ def _solve_once(
     return (out[0], out[0]) if targets.is_rigid else (out[0], out[1])
 
 
-def _residuals(lattice: PillarLattice, targets: PillarTargets) -> np.ndarray:
-    """Distance from each target row to its pillar's CURRENT position."""
+def _residuals(
+    lattice: PillarLattice,
+    targets: PillarTargets,
+    original: PillarLattice | None = None,
+    normal_only: bool = False,
+) -> np.ndarray:
+    """How far each target row still is from what the solve was asked to achieve.
+
+    With point targets that is the distance to the target POINT. Under
+    ``normal_only`` the objective constrains only the component along the target's
+    own normal — the tangential position is deliberately free — so the point
+    distance would overstate the error. The residual is then the perpendicular
+    distance to the target's line, which is what "minimise the distance to the
+    fault" actually means.
+    """
     if targets.n == 0:
         return np.empty(0)
     now = lattice.top[targets.ij[:, 0], targets.ij[:, 1]]
-    return np.linalg.norm(now - targets.xy_top, axis=1)
+    delta = now - targets.xy_top
+    if not normal_only or original is None:
+        return np.linalg.norm(delta, axis=1)
+    ref = original.top[targets.ij[:, 0], targets.ij[:, 1]]
+    n = targets.xy_top - ref                       # the direction assembly used
+    ln = np.linalg.norm(n, axis=1)
+    safe = ln > 1e-14
+    n = np.where(safe[:, None], n / np.where(safe, ln, 1.0)[:, None], 0.0)
+    return np.abs(np.sum(delta * n, axis=1))
 
 
 def morph_pillars(
@@ -392,6 +609,13 @@ def morph_pillars(
     w0: float = 0.3,
     boundary: str = "slide",
     boundary_scope: str = "active",
+    support_rings: int | None = None,
+    normal_only: bool = True,
+    smoothness: str = "elastic",
+    poisson: float = 0.3,
+    stiffness: np.ndarray | None = None,
+    stiffness_iterations: int = 0,
+    stiffness_power: float = 1.0,
     write_tol: float = 1e-9,
     min_fraction: float = 0.10,
     max_bisect: int = 20,
@@ -416,6 +640,30 @@ def morph_pillars(
         written, so the deck diff stays local instead of touching every pillar.
     min_fraction
         Minimum surviving pillar separation, as a fraction of the original.
+    smoothness
+        ``"elastic"`` (default) minimises linear-elastic strain energy, which
+        penalises SHEAR directly because it couples the x and y components.
+        ``"laplacian"`` penalises the displacement gradient only; it is cheaper to
+        reason about but nearly blind to shear, which shows up as skewed cells.
+    poisson
+        Poisson's ratio for the elastic operator. ``0.0`` lets cells change area
+        freely, ``0.3`` is a good default, and values toward ``0.5`` increasingly
+        preserve area at the cost of more shear elsewhere.
+    stiffness
+        Optional ``(NX, NY)`` per-cell modulus. Non-uniform stiffness steers WHERE
+        the deformation goes without changing the grid.
+    stiffness_iterations
+        Re-solve this many times, each time stiffening cells in proportion to how
+        distorted they became (see :func:`stiffness_from_quality`). Evens out the
+        worst-cell tail. ``0`` (default) disables it.
+    stiffness_power
+        How aggressively bad cells are stiffened between those iterations.
+    support_rings
+        Confine the morph to pillars within this many lattice rings of the targeted
+        set; everything beyond is pinned. ``None`` (default) leaves the whole grid
+        free, which gives the best mesh quality because distortion can spread. A
+        finite value keeps the change local — the rest of the deck is untouched —
+        at the cost of concentrating strain at the edge of the band.
     """
     if boundary not in BOUNDARY_MODES:
         raise ValueError(f"boundary must be one of {BOUNDARY_MODES}; got {boundary!r}")
@@ -423,9 +671,15 @@ def morph_pillars(
     original = pillar_lattice(grid)
     h = local_spacing(original)
     bmask = boundary_mask(grid, scope=boundary_scope)
+    free_mask = (
+        support_mask(original.shape, targets.ij, support_rings)
+        if support_rings is not None and targets.n
+        else None
+    )
 
     def attempt(w: float) -> tuple[MorphResult, PillarLattice]:
-        d_top, d_bot = _solve_once(original, targets, h, w, bmask, boundary)
+        d_top, d_bot = _solve_once(original, targets, h, w, bmask, boundary, free_mask, normal_only,
+                                   smoothness, poisson, stiffness)
         small = np.linalg.norm(d_top, axis=-1) < write_tol
         d_top = np.where(small[..., None], 0.0, d_top)
         d_bot = np.where(small[..., None], 0.0, d_bot)
@@ -435,15 +689,29 @@ def morph_pillars(
         return (
             MorphResult(
                 grid=moved, d_top=d_top, d_bot=d_bot, w=w,
-                validity=rep, residuals=_residuals(lat, targets),
+                validity=rep, residuals=_residuals(lat, targets, original, normal_only),
             ),
             lat,
         )
 
+    def refine(res: MorphResult) -> MorphResult:
+        """Re-solve with cells stiffened in proportion to how bad they became."""
+        nonlocal stiffness
+        out = res
+        for _ in range(max(int(stiffness_iterations), 0)):
+            stiffness = stiffness_from_quality(
+                pillar_lattice(out.grid), power=stiffness_power
+            )
+            cand, _ = attempt(out.w)
+            if not cand.ok:
+                break
+            out = cand
+        return out
+
     best, _ = attempt(w0)
     best.history.append((w0, best.validity.ok, best.validity.n_folded))
     if best.ok:
-        return best
+        return refine(best)
 
     # w0 folded — climb to a valid upper bracket, then bisect toward w0.
     lo, hi = w0, w0
@@ -476,4 +744,4 @@ def morph_pillars(
 
     valid.bisection_steps = steps
     valid.history = best.history
-    return valid
+    return refine(valid)
