@@ -55,14 +55,20 @@ class ValidityReport:
     n_folded: int
     n_welded: int
     n_too_close: int
+    degenerate: np.ndarray | None = None   # (NX, NY) bool — below min_scaled_jacobian
+    n_degenerate: int = 0
 
     def summary(self) -> str:
         if self.ok:
             return "valid: no folds, no welds, no separation violations"
-        return (
-            f"INVALID: {self.n_folded} folded column(s), {self.n_welded} weld(s), "
-            f"{self.n_too_close} separation violation(s)"
-        )
+        bits = [
+            f"{self.n_folded} folded column(s)",
+            f"{self.n_welded} weld(s)",
+            f"{self.n_too_close} separation violation(s)",
+        ]
+        if self.n_degenerate:
+            bits.append(f"{self.n_degenerate} degenerate cell(s)")
+        return "INVALID: " + ", ".join(bits)
 
 
 def column_signed_areas(xy: np.ndarray) -> np.ndarray:
@@ -246,11 +252,22 @@ def check_validity(
     original: PillarLattice,
     *,
     min_fraction: float = 0.10,
+    min_scaled_jacobian: float | None = None,
 ) -> ValidityReport:
     """Full validity check of ``candidate`` against the ``original`` it came from.
 
     Checks the signed-area sign at BOTH the top and bottom planes (independent once
     pillars are slanted), plus weld and separation guards.
+
+    ``min_scaled_jacobian`` closes a real hole, and is OFF by default because
+    switching it on changes what "valid" means for decks that pass today. Every
+    check above tests whether corners CROSS. A cell can be flattened to near-zero
+    area without any corner crossing: measured on the benchmark's `zigzag` case, the
+    engine returned ``ok=True, n_folded=0`` for a mesh containing a cell at scaled
+    Jacobian 5.2e-04, with 14 cells below 0.3. Degenerate is not inverted, so
+    nothing here saw it. Pass a threshold — 0.05 is a conservative floor, 0.3 the
+    usual reject level — to make that an invalidity rather than a surprise
+    downstream.
     """
     # Signed-area sign flip catches whole-cell inversion; corner_folds catches the
     # single-corner fold an area sum can hide. Both are needed.
@@ -274,8 +291,19 @@ def check_validity(
     n_folded = int(folded_top.sum() + folded_bot.sum())
     n_welded = int(welded.sum())
     n_too_close = int(too_close.sum())
+
+    degenerate = None
+    n_degenerate = 0
+    if min_scaled_jacobian is not None:
+        from cpg2unstructured.quality import scaled_jacobian
+
+        sj = np.minimum(scaled_jacobian(candidate.top), scaled_jacobian(candidate.bot))
+        degenerate = sj < float(min_scaled_jacobian)
+        n_degenerate = int(degenerate.sum())
+
     return ValidityReport(
-        ok=(n_folded == 0 and n_welded == 0 and n_too_close == 0),
+        ok=(n_folded == 0 and n_welded == 0 and n_too_close == 0
+            and n_degenerate == 0),
         folded_top=folded_top,
         folded_bot=folded_bot,
         welded=welded,
@@ -283,6 +311,8 @@ def check_validity(
         n_folded=n_folded,
         n_welded=n_welded,
         n_too_close=n_too_close,
+        degenerate=degenerate,
+        n_degenerate=n_degenerate,
     )
 
 

@@ -49,6 +49,7 @@ import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 
 from cpg2unstructured.corner_point import CornerPointGrid
+from cpg2unstructured.distortion import DistortionTerms
 from cpg2unstructured.pillars import (
     PillarLattice,
     apply_displacement,
@@ -56,7 +57,10 @@ from cpg2unstructured.pillars import (
     local_spacing,
     pillar_lattice,
 )
+from cpg2unstructured.polish import PolishReport
 from cpg2unstructured.validity import ValidityReport, check_validity
+
+POLISH_MODES = ("none", "barrier")
 
 __all__ = ["PillarTargets", "MorphResult", "morph_pillars", "laplacian_matrix",
            "elastic_stiffness", "stiffness_from_quality", "stiffness_from_band",
@@ -133,6 +137,7 @@ class MorphResult:
     iterations: int = 0
     bisection_steps: int = 0
     history: list = field(default_factory=list)
+    polish: PolishReport | None = None
 
     @property
     def ok(self) -> bool:
@@ -151,9 +156,11 @@ class MorphResult:
             )
         else:
             stats = "no targets"
+        tail = f" · {self.polish.summary()}" if self.polish is not None else ""
         return (
             f"w={self.w:.4g} · {self.bisection_steps} bisection step(s) · "
             f"{self.n_moved} pillar(s) moved · {stats} · {self.validity.summary()}"
+            + tail
         )
 
 
@@ -660,6 +667,11 @@ def morph_pillars(
     min_fraction: float = 0.10,
     max_bisect: int = 20,
     w_max: float = 1e6,
+    polish: str = "none",
+    polish_fidelity: float = 4.0,
+    polish_size: float = 0.0,
+    polish_shape_size: float = 0.0,
+    polish_iterations: int = 200,
 ) -> MorphResult:
     """Move ``targets``' pillars toward their targets, keeping every cell valid.
 
@@ -707,6 +719,23 @@ def morph_pillars(
     band_softness
         The band's modulus relative to the surrounding grid. Lower is softer;
         0.02 makes the band 50x more compliant.
+    polish
+        ``"none"`` (default) or ``"barrier"``. The barrier polish takes the
+        quadratic solution as a starting point and minimises a TMOP distortion
+        energy measured against each cell's ORIGINAL shape — see
+        :mod:`cpg2unstructured.polish`. It cannot invert a cell, because the energy
+        diverges as one degenerates, and it removes the degenerate cells the
+        quadratic solve leaves behind: 14 cells below scaled Jacobian 0.3 became 0
+        on the benchmark's `zigzag` case. It costs fidelity, so it is opt-in.
+    polish_fidelity
+        How hard the polish holds the pillars on the fault. LARGER is closer — the
+        opposite sense to ``w``, because here it is the fault term being weighted.
+    polish_size, polish_shape_size
+        Optional extra barrier terms: ``size`` resists area collapse (TMOP metric
+        056), ``shape_size`` is the symmetric Dirichlet energy (metric 007). Both
+        default to off; ``shape`` alone carried nearly all of the measured gain.
+    polish_iterations
+        L-BFGS iteration cap for the polish.
     support_rings
         Confine the morph to pillars within this many lattice rings of the targeted
         set; everything beyond is pinned. ``None`` (default) leaves the whole grid
@@ -716,6 +745,8 @@ def morph_pillars(
     """
     if boundary not in BOUNDARY_MODES:
         raise ValueError(f"boundary must be one of {BOUNDARY_MODES}; got {boundary!r}")
+    if polish not in POLISH_MODES:
+        raise ValueError(f"polish must be one of {POLISH_MODES}; got {polish!r}")
 
     original = pillar_lattice(grid)
     h = local_spacing(original)
@@ -763,10 +794,21 @@ def morph_pillars(
             out = cand
         return out
 
+    def finish(res: MorphResult) -> MorphResult:
+        """Apply the barrier polish, if asked, and never return a worse grid."""
+        if polish != "barrier" or not targets.n:
+            return res
+        return _apply_polish(
+            grid, original, res, targets, bmask, boundary, free_mask,
+            fidelity=polish_fidelity, size=polish_size,
+            shape_size=polish_shape_size, max_iter=polish_iterations,
+            min_fraction=min_fraction, normal_only=normal_only,
+        )
+
     best, _ = attempt(w0)
     best.history.append((w0, best.validity.ok, best.validity.n_folded))
     if best.ok:
-        return refine(best)
+        return finish(refine(best))
 
     # w0 folded — climb to a valid upper bracket, then bisect toward w0.
     lo, hi = w0, w0
@@ -799,4 +841,76 @@ def morph_pillars(
 
     valid.bisection_steps = steps
     valid.history = best.history
-    return refine(valid)
+    return finish(refine(valid))
+
+
+def _apply_polish(
+    grid: CornerPointGrid,
+    original: PillarLattice,
+    res: MorphResult,
+    targets: PillarTargets,
+    bmask: np.ndarray,
+    boundary: str,
+    free_mask: np.ndarray | None,
+    *,
+    fidelity: float,
+    size: float,
+    shape_size: float,
+    max_iter: int,
+    min_fraction: float,
+    normal_only: bool,
+) -> MorphResult:
+    """Run the barrier polish on a finished morph and re-validate the outcome.
+
+    The polish is a strict improvement or nothing: if it fails to descend, or if the
+    polished grid does not pass the SAME validity checks the solve had to pass, the
+    original result is returned with the report attached saying so. A stage that can
+    silently make a deck worse is not a polish.
+    """
+    from cpg2unstructured.polish import polish_lattice
+
+    nx1, ny1 = original.shape
+    R = _reduction(nx1 * ny1, (nx1, ny1), bmask, boundary, free_mask)
+    terms = DistortionTerms(shape=1.0, size=size, shape_size=shape_size)
+    started = pillar_lattice(res.grid)
+
+    rigid = targets.xy_bot is None
+
+    tops, report = polish_lattice(
+        original.top, started.top, R, targets.ij, targets.xy_top,
+        fidelity=fidelity, terms=terms, max_iter=max_iter,
+    )
+    if not report.applied:
+        res.polish = report
+        return res
+
+    d_top = tops - original.top
+    if rigid:
+        # Stage 1 moves the whole pillar rigidly; the polish must not break that or
+        # the pillars would acquire a tilt the fault never asked for.
+        d_bot = d_top.copy()
+    else:
+        assert targets.xy_bot is not None          # `rigid` is exactly this test
+        bots, rep_b = polish_lattice(
+            original.bot, started.bot, R, targets.ij, targets.xy_bot,
+            fidelity=fidelity, terms=terms, max_iter=max_iter,
+        )
+        d_bot = (bots - original.bot) if rep_b.applied else res.d_bot
+
+    moved = apply_displacement(grid, d_top, d_bot)
+    lat = pillar_lattice(moved)
+    rep = check_validity(lat, original, min_fraction=min_fraction)
+    if not rep.ok:
+        res.polish = PolishReport(
+            report.energy_before, report.energy_after, report.iterations, False,
+            f"polished grid failed validity ({rep.summary()}); the input was kept",
+            applied=False,
+        )
+        return res
+
+    return MorphResult(
+        grid=moved, d_top=d_top, d_bot=d_bot, w=res.w, validity=rep,
+        residuals=_residuals(lat, targets, original, normal_only),
+        iterations=res.iterations, bisection_steps=res.bisection_steps,
+        history=res.history, polish=report,
+    )
