@@ -134,11 +134,13 @@ def projected_topology(
         nodes2d /= np.maximum(counts, 1.0)[:, None]
     else:
         key = coords2d if decimals is None else np.round(coords2d, decimals)
-        nodes2d, inverse = np.unique(key, axis=0, return_inverse=True)
-        node_of_grid_node = inverse.astype(np.int64, copy=False).ravel()
-        if decimals is not None:
-            # Report the rounded coordinates we actually deduplicated on.
-            nodes2d = nodes2d.astype(np.float64, copy=False)
+        # Indexed rather than tuple-unpacked: mypy 2.3.0 crashes with an INTERNAL
+        # ERROR resolving the np.unique overload for `a, b = np.unique(..., axis=0,
+        # return_inverse=True)` against the numpy stubs CI installs. Local runs pass
+        # on the same mypy with an older numpy, so pinning either would only hide it.
+        collapsed = np.unique(key, axis=0, return_inverse=True)
+        nodes2d = np.asarray(collapsed[0], dtype=np.float64)
+        node_of_grid_node = np.asarray(collapsed[1]).astype(np.int64, copy=False).ravel()
 
     # 2. Select the lateral faces that lie in-plane (normal to a kept axis).
     fdir = grid.faces.direction
