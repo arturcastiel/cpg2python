@@ -26,7 +26,7 @@ dependencies = [
 
 [project.optional-dependencies]
 fast = ["scipy>=1.10"]
-dev  = ["pytest>=7", "pytest-cov>=4", "build", "hypothesis>=6"]
+dev  = ["pytest>=7", "pytest-cov>=4", "build", "hypothesis>=6", "ruff>=0.6", "mypy>=1.11"]
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -38,3 +38,39 @@ cpg2unstructured = ["py.typed"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+# Deliberately close to ruff's default set (E, F) plus import hygiene and a few
+# bug-catchers. Kept narrow so the gate flags real problems rather than style
+# opinions — every rule enabled here passes clean on main as of this commit.
+select = ["E", "F", "I", "B", "UP"]
+ignore = [
+    "E501",  # line length is enforced by the formatter, not the linter
+    "B905",  # zip(strict=) — not available on the 3.10 floor
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests import fixtures for their side effects and rebind names freely.
+"tests/*" = ["F401", "E402"]
+
+[tool.mypy]
+# Analyse under 3.12, NOT the 3.10 runtime floor. numpy's bundled stubs use PEP 695
+# `type X = ...` statements, which only parse under 3.12+ — pinning mypy to 3.10 makes
+# it reject numpy/__init__.pyi outright and abort before checking our code. The 3.10
+# floor is a *runtime* guarantee and is enforced by the pytest matrix instead.
+python_version = "3.12"
+files = ["cpg2unstructured"]
+# Pragmatic baseline: catch real type errors in our own code without demanding
+# annotations on every helper. Tighten incrementally.
+ignore_missing_imports = true      # scipy / resfo ship no stubs
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+module = ["scipy.*", "resfo.*"]
+ignore_missing_imports = true

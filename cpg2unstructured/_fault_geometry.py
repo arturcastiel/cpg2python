@@ -195,7 +195,10 @@ def compute_face_geometry(
         ],
         axis=1,
     )                                            # (n, 4)
-    I = pa.copy()
+    # `I` mirrors the MATLAB reference variable — the index comments below
+    # ("MATLAB: J(:, [1,3,5,7]) = I(:, [1,2,4,3])") only read correctly with
+    # this name, so E741 is suppressed here rather than losing the provenance.
+    I = pa.copy()  # noqa: E741
     I[pick_pb] = pb[pick_pb]
 
     # Pinch dedup on the pillar points: if bot and top on the SAME

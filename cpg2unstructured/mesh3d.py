@@ -15,7 +15,7 @@ import scipy.sparse as sp
 from scipy.spatial import cKDTree
 
 from cpg2unstructured.geometry import cell_geometry, face_geometry
-from cpg2unstructured.graph import shortest_path_fast
+from cpg2unstructured.graph import csgraph_indices, shortest_path_fast
 from cpg2unstructured.unstructured import UnstructuredGrid
 
 __all__ = [
@@ -218,7 +218,7 @@ def build_mesh_graph_3d(grid: UnstructuredGrid) -> Mesh3DGraph:
     rows = np.concatenate([edges[:, 0], edges[:, 1]])
     cols = np.concatenate([edges[:, 1], edges[:, 0]])
     data = np.concatenate([elen, elen])
-    csr = sp.csr_array((data, (rows, cols)), shape=(n, n))
+    csr = csgraph_indices(sp.csr_array((data, (rows, cols)), shape=(n, n)))
     return Mesh3DGraph(
         nodes=nodes, edges=edges,
         edge_len=elen.astype(np.float64, copy=False),

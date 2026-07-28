@@ -43,7 +43,6 @@ __all__ = [
 from cpg2unstructured._fault_connections import find_connections
 from cpg2unstructured._fault_geometry import compute_face_geometry
 
-
 # Local-corner ordering — matches an earlier `_LOCAL_CORNERS`.
 _LOCAL_CORNERS = (
     (0, 0, 0), (1, 0, 0), (0, 1, 0), (1, 1, 0),
@@ -804,7 +803,7 @@ class UnstructuredGrid:
     # the components as independent grids.
     component: np.ndarray = field(default_factory=lambda: np.empty((0,), dtype=np.int64))
     props: dict[str, np.ndarray] = field(default_factory=dict)
-    _index_map: "IndexMap | None" = field(default=None, repr=False, compare=False)
+    _index_map: IndexMap | None = field(default=None, repr=False, compare=False)
 
     def __getitem__(self, key: str) -> np.ndarray:
         try:
@@ -823,7 +822,7 @@ class UnstructuredGrid:
         return int(self.cell_faces.shape[0])
 
     @property
-    def index_map(self) -> "IndexMap":
+    def index_map(self) -> IndexMap:
         """Lazy-cached :class:`IndexMap` built from cart_dims + original_ijk.
 
         Frozen-dataclass cache: stored via ``object.__setattr__`` on
@@ -838,7 +837,7 @@ class UnstructuredGrid:
             )
         return self._index_map  # type: ignore[return-value]
 
-    def split(self) -> "list[UnstructuredGrid]":
+    def split(self) -> list[UnstructuredGrid]:
         """Materialise each connected component as an independent grid.
 
         Returns one :class:`UnstructuredGrid` per ``component`` label, in
@@ -905,7 +904,7 @@ class UnstructuredGrid:
 _TopoMesh = UnstructuredGrid
 
 
-def attach_props(grid: UnstructuredGrid, grdecl: "Grdecl") -> UnstructuredGrid:
+def attach_props(grid: UnstructuredGrid, grdecl: Grdecl) -> UnstructuredGrid:
     """Filter each property in ``grdecl.props`` to active cells in the
     grid's order. Returns a NEW :class:`UnstructuredGrid` (frozen) with
     the populated ``props`` dict — the input grid is not mutated.
@@ -1109,9 +1108,9 @@ def build_topology(cube: CornerCube) -> UnstructuredGrid:
         """Replace inactive-cell positions with -1, then apply keep mask."""
         low_active  = _active_lookup(low_orig,  actnum_flat)
         high_active = _active_lookup(high_orig, actnum_flat)
-        l = np.where(low_active,  low_orig,  -1)
-        h = np.where(high_active, high_orig, -1)
-        return l[keep], h[keep]
+        lo = np.where(low_active,  low_orig,  -1)
+        hi = np.where(high_active, high_orig, -1)
+        return lo[keep], hi[keep]
 
     i_l, i_h = _filter_neighbours(i_low_orig, i_high_orig, i_keep)
     j_l, j_h = _filter_neighbours(j_low_orig, j_high_orig, j_keep)

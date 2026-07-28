@@ -1,6 +1,7 @@
+from pathlib import Path
+
 import numpy as np
 import pytest
-from pathlib import Path
 
 from cpg2unstructured import Grdecl, read_grdecl
 from cpg2unstructured._errors import (

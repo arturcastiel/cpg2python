@@ -62,8 +62,8 @@ def _cartesian_2x2x2() -> dict[str, np.ndarray]:
     for k in range(nz):
         ztop = float(k)
         zbot = float(k + 1)
-        for j in range(ny):
-            for i in range(nx):
+        for _j in range(ny):
+            for _i in range(nx):
                 zcorn[pos : pos + 4] = ztop
                 zcorn[pos + 4 : pos + 8] = zbot
                 pos += 8

@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import warnings
 from pathlib import Path
-from typing import Iterable
 
 import numpy as np
 import resfo

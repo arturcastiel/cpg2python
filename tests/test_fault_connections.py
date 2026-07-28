@@ -16,7 +16,6 @@ from cpg2unstructured._fault_connections import (
     overlap,
 )
 
-
 # ── overlap predicate ───────────────────────────────────────────────
 
 

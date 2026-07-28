@@ -22,7 +22,6 @@ from cpg2unstructured.unstructured import (
     find_k_faces,
 )
 
-
 # ── matching-Z decks: every mask should be empty ────────────────────
 
 

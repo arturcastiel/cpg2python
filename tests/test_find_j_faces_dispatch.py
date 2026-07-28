@@ -14,7 +14,6 @@ from cpg2unstructured import from_grdecl, read_grdecl
 from cpg2unstructured._errors import NonMatchingZError
 from cpg2unstructured.unstructured import find_j_faces
 
-
 # ──  invariance ──────────────────────────────────────────────
 
 

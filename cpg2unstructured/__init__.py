@@ -47,17 +47,17 @@ from cpg2unstructured.minimal_surface import (
     project_to_plane,
     surface_boundary_loops,
 )
+from cpg2unstructured.planview import (
+    PLANE_AXES,
+    ProjectedTopology,
+    projected_topology,
+)
 from cpg2unstructured.prescribed_fill import (
     BoundaryDoesNotBound,
     fill_prescribed_boundary,
     fill_with_seed,
     gf2_solve_boundary,
     reduce_area,
-)
-from cpg2unstructured.planview import (
-    PLANE_AXES,
-    ProjectedTopology,
-    projected_topology,
 )
 from cpg2unstructured.unstructured import (
     Faces,
