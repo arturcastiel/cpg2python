@@ -30,7 +30,25 @@ metric       formula                                controls
 ``shape``    ``0.5 |T|² / det(T) - 1``              shape (barrier, polyconvex)
 ``size``     ``0.5 (det T + 1/det T) - 1``          area collapse (barrier)
 ``shape_size`` ``|T - T⁻ᵀ|²``                       both (barrier, symmetric Dirichlet)
+``ortho``    ``(u·v)² / (|u|²|v|²)``, u,v = cols T  ORTHOGONALITY (not a barrier)
 ===========  =====================================  ==============================
+
+``ortho`` comes from the elliptic-generation literature rather than from TMOP.
+Ryskin and Leal's system, and Zhang, Jia & Wang's control of its distortion
+function (J. Comput. Phys. 218:549-571, 2006), make orthogonality the OBJECTIVE
+rather than a by-product — expressed there as a directional weight ratio
+``f = h_eta / h_xi`` in a covariant Laplace equation. Transplanting that equation
+here does not help: measured at equal fidelity it is slightly worse than the
+shipped operators, and after the barrier polish the difference vanishes entirely.
+Transplanting the *idea* — orthogonality as an explicit term — does help, a lot.
+
+It is measured on ``T``, not on ``J``, and that distinction is the whole of it. A
+sheared or graded deck has cells that are not square to begin with; penalising the
+absolute angle would pull them square, "improving" the mesh by destroying the
+geometry it was built with. On ``T`` a cell that KEPT its original angle scores
+zero, whatever that angle was. Measured on the sheared benchmark grid: identical
+quality either way, but the relative form holds the fault 2.2 m closer because it
+is not spending the budget fighting the shear.
 
 Every energy here returns its analytic gradient with it; ``tests/test_distortion.py``
 checks each one against finite differences.
@@ -127,9 +145,10 @@ class DistortionTerms:
     shape: float = 1.0
     size: float = 0.0
     shape_size: float = 0.0
+    ortho: float = 0.0
 
     def any_active(self) -> bool:
-        return bool(self.shape or self.size or self.shape_size)
+        return bool(self.shape or self.size or self.shape_size or self.ortho)
 
 
 def distortion_energy(
@@ -178,6 +197,22 @@ def distortion_energy(
             2.0 * T * (1.0 + 1.0 / det ** 2)[..., None, None]
             - (2.0 * fro / det ** 3)[..., None, None] * adj
         ) / n
+
+    if terms.ortho:
+        # (u.v)^2 / (|u|^2 |v|^2) — zero exactly when the two columns of T are
+        # perpendicular, i.e. when the cell corner kept its original angle. Scale
+        # invariant, and NOT a barrier: it says nothing about inversion, so it is
+        # only safe alongside `shape`, which does.
+        u, v = T[..., 0], T[..., 1]
+        a = (u * v).sum(-1)
+        bb = np.maximum((u * u).sum(-1), 1e-30)
+        cc = np.maximum((v * v).sum(-1), 1e-30)
+        energy += terms.ortho * float((a * a / (bb * cc)).sum()) / n
+        du = (2.0 * a[..., None] * v / (bb * cc)[..., None]
+              - 2.0 * (a * a)[..., None] * u / (bb * bb * cc)[..., None])
+        dv = (2.0 * a[..., None] * u / (bb * cc)[..., None]
+              - 2.0 * (a * a)[..., None] * v / (bb * cc * cc)[..., None])
+        dE_dT += terms.ortho * np.stack([du, dv], axis=-1) / n
 
     dE_dJ = dE_dT if winv is None else dE_dT @ np.swapaxes(winv, -1, -2)
 

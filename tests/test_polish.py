@@ -236,3 +236,40 @@ class TestPillarAlreadyOnTheFault:
         assert np.linalg.norm(got[0] - xy[0]) < 2.0
         assert np.linalg.norm(got[2] - xy[2]) < 2.0
         assert np.linalg.norm(got[1] - lat.top[4, 4]) > 5.0
+
+
+class TestOrthogonalityDial:
+    """`polish_ortho` must be monotone and must never break validity."""
+
+    def test_more_weight_means_more_orthogonal(self, grid, targets):
+        from cpg2unstructured import non_orthogonality
+
+        p95 = []
+        for o in (0.0, 2.0, 8.0):
+            r = morph_pillars(grid, targets, w0=0.05, boundary="slide",
+                              polish="barrier", polish_ortho=o)
+            assert r.ok, f"ortho={o}: {r.validity.summary()}"
+            p95.append(float(np.percentile(
+                non_orthogonality(pillar_lattice(r.grid).top), 95)))
+        assert p95[0] > p95[1] > p95[2], p95
+
+    def test_it_costs_fidelity_and_says_so(self, grid, targets):
+        a = morph_pillars(grid, targets, w0=0.05, boundary="slide",
+                          polish="barrier", polish_ortho=0.0)
+        b = morph_pillars(grid, targets, w0=0.05, boundary="slide",
+                          polish="barrier", polish_ortho=8.0)
+        assert b.residuals.mean() > a.residuals.mean()
+
+    def test_it_improves_cell_shape_too(self, grid, targets):
+        a = morph_pillars(grid, targets, w0=0.05, boundary="slide",
+                          polish="barrier", polish_ortho=0.0)
+        b = morph_pillars(grid, targets, w0=0.05, boundary="slide",
+                          polish="barrier", polish_ortho=8.0)
+        assert (scaled_jacobian(pillar_lattice(b.grid).top).min()
+                > scaled_jacobian(pillar_lattice(a.grid).top).min())
+
+    def test_off_by_default(self, grid, targets):
+        a = morph_pillars(grid, targets, w0=0.05, boundary="slide", polish="barrier")
+        b = morph_pillars(grid, targets, w0=0.05, boundary="slide",
+                          polish="barrier", polish_ortho=0.0)
+        np.testing.assert_allclose(a.d_top, b.d_top, atol=1e-12)
