@@ -42,6 +42,7 @@ count is independent of NZ) that costs nothing.
 """
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -52,6 +53,7 @@ from cpg2unstructured.corner_point import CornerPointGrid
 from cpg2unstructured.distortion import DistortionTerms
 from cpg2unstructured.pillars import (
     PillarLattice,
+    active_columns,
     apply_displacement,
     boundary_mask,
     local_spacing,
@@ -59,6 +61,15 @@ from cpg2unstructured.pillars import (
 )
 from cpg2unstructured.polish import PolishReport
 from cpg2unstructured.validity import ValidityReport, check_validity
+
+
+class ValidityExhausted(RuntimeError):
+    """No smoothness weight in [w0, w_max] produced a valid grid."""
+
+
+class ValidityExhaustedWarning(UserWarning):
+    """Emitted when `morph_pillars` returns an invalid grid because none exists."""
+
 
 POLISH_MODES = ("none", "barrier")
 
@@ -137,6 +148,7 @@ class MorphResult:
     iterations: int = 0
     bisection_steps: int = 0
     history: list = field(default_factory=list)
+    bracket_exhausted: bool = False
     polish: PolishReport | None = None
 
     @property
@@ -695,6 +707,8 @@ def morph_pillars(
     polish_shape_size: float = 0.0,
     polish_ortho: float = 0.0,
     polish_iterations: int = 200,
+    validity_scope: str = "active",
+    on_invalid: str = "warn",
 ) -> MorphResult:
     """Move ``targets``' pillars toward their targets, keeping every cell valid.
 
@@ -767,6 +781,21 @@ def morph_pillars(
         for roughly double the residual. A clean monotone dial.
     polish_iterations
         L-BFGS iteration cap for the polish.
+    validity_scope
+        ``"active"`` (default) counts folds, welds and separation violations ONLY in
+        columns holding at least one live cell; ``"lattice"`` counts them everywhere.
+        A fold in a column with no cells is arithmetic on absent geometry, not a
+        defect — and rejecting a morph for one makes the bisection raise ``w`` until
+        the morph stops moving. Measured on Norne (56% dead columns), that cost
+        roughly 4x the fidelity on real faults. ``"active"`` matches the default
+        ``boundary_scope`` already used for the rim; ``"lattice"`` restores the
+        older, stricter behaviour.
+    on_invalid
+        What to do when the bisection exhausts its bracket and no valid ``w``
+        exists: ``"warn"`` (default) returns the best attempt and emits a warning,
+        ``"raise"`` raises, ``"ignore"`` returns silently as older versions did.
+        The old behaviour was to return an INVALID grid with no signal at all, so a
+        caller who did not check ``.ok`` wrote a broken deck and never knew.
     support_rings
         Confine the morph to pillars within this many lattice rings of the targeted
         set; everything beyond is pinned. ``None`` (default) leaves the whole grid
@@ -778,6 +807,13 @@ def morph_pillars(
         raise ValueError(f"boundary must be one of {BOUNDARY_MODES}; got {boundary!r}")
     if polish not in POLISH_MODES:
         raise ValueError(f"polish must be one of {POLISH_MODES}; got {polish!r}")
+    if validity_scope not in ("active", "lattice"):
+        raise ValueError(
+            f"validity_scope must be 'active' or 'lattice'; got {validity_scope!r}")
+    if on_invalid not in ("warn", "raise", "ignore"):
+        raise ValueError(
+            f"on_invalid must be 'warn', 'raise' or 'ignore'; got {on_invalid!r}")
+    live = active_columns(grid) if validity_scope == "active" else None
 
     original = pillar_lattice(grid)
     h = local_spacing(original)
@@ -802,7 +838,8 @@ def morph_pillars(
         d_bot = np.where(small[..., None], 0.0, d_bot)
         moved = apply_displacement(grid, d_top, d_bot)
         lat = pillar_lattice(moved)
-        rep = check_validity(lat, original, min_fraction=min_fraction)
+        rep = check_validity(lat, original, min_fraction=min_fraction,
+                             active=live)
         return (
             MorphResult(
                 grid=moved, d_top=d_top, d_bot=d_bot, w=w,
@@ -834,7 +871,7 @@ def morph_pillars(
             fidelity=polish_fidelity, size=polish_size,
             shape_size=polish_shape_size, ortho=polish_ortho,
             max_iter=polish_iterations,
-            min_fraction=min_fraction, normal_only=normal_only,
+            min_fraction=min_fraction, normal_only=normal_only, active=live,
         )
 
     best, _ = attempt(w0)
@@ -856,7 +893,18 @@ def morph_pillars(
             break
     if valid is None:
         best.bisection_steps = len(best.history) - 1
-        return best                                  # no valid w found; caller decides
+        best.bracket_exhausted = True
+        msg = (
+            f"morph_pillars: no valid smoothness weight exists between w0={w0:g} and "
+            f"w_max={w_max:g} — every attempt folded a cell. Returning the best "
+            f"attempt, which is INVALID ({best.validity.summary()}). Check "
+            f"`result.ok` before writing this grid."
+        )
+        if on_invalid == "raise":
+            raise ValidityExhausted(msg)
+        if on_invalid == "warn":
+            warnings.warn(msg, ValidityExhaustedWarning, stacklevel=2)
+        return best
 
     steps = 0
     for _ in range(max_bisect):
@@ -892,6 +940,7 @@ def _apply_polish(
     max_iter: int,
     min_fraction: float,
     normal_only: bool,
+    active: np.ndarray | None = None,
 ) -> MorphResult:
     """Run the barrier polish on a finished morph and re-validate the outcome.
 
@@ -912,6 +961,9 @@ def _apply_polish(
     tops, report = polish_lattice(
         original.top, started.top, R, targets.ij, targets.xy_top,
         fidelity=fidelity, terms=terms, max_iter=max_iter,
+        # A rigid morph moves both ends of a pillar by the same vector, so the
+        # bottom plane must be in the objective or the barrier never sees it fold.
+        second=(original.bot, started.bot) if rigid else None,
     )
     if not report.applied:
         res.polish = report
@@ -932,7 +984,7 @@ def _apply_polish(
 
     moved = apply_displacement(grid, d_top, d_bot)
     lat = pillar_lattice(moved)
-    rep = check_validity(lat, original, min_fraction=min_fraction)
+    rep = check_validity(lat, original, min_fraction=min_fraction, active=active)
     if not rep.ok:
         res.polish = PolishReport(
             report.energy_before, report.energy_after, report.iterations, False,

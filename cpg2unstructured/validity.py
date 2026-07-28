@@ -253,11 +253,26 @@ def check_validity(
     *,
     min_fraction: float = 0.10,
     min_scaled_jacobian: float | None = None,
+    active: np.ndarray | None = None,
 ) -> ValidityReport:
     """Full validity check of ``candidate`` against the ``original`` it came from.
 
     Checks the signed-area sign at BOTH the top and bottom planes (independent once
     pillars are slanted), plus weld and separation guards.
+
+    ``active`` is an ``(NX, NY)`` bool mask of columns that hold at least one live
+    cell. Without it every check runs over the whole lattice, **including columns
+    that contain no cells at all** — and a fold in a column with no cells is not a
+    defect, it is arithmetic on absent geometry. Measured on Norne, where 56% of
+    columns are dead: the deck SHIPS with 23 inverted columns, 18 of them dead, and
+    a morph that flips one more is rejected. The bisection answers the rejection by
+    raising the smoothness weight until the morph stops moving — on the `m_east`
+    fault it settles at ``w`` above 100 and removes 20% of the misfit, where a
+    weight that ignores dead ground removes far more with zero folds in live cells.
+    Roughly 4x the fidelity was being surrendered to cells that hold no fluid.
+
+    Pass :func:`cpg2unstructured.pillars.active_columns(grid)`. ``morph_pillars``
+    does this for you by default — see its ``validity_scope``.
 
     ``min_scaled_jacobian`` closes a real hole, and is OFF by default because
     switching it on changes what "valid" means for decks that pass today. Every
@@ -280,6 +295,7 @@ def check_validity(
     welded, too_close = separation_violations(
         candidate, original, min_fraction=min_fraction
     )
+    live_pillar = None if active is None else _pillars_of(active)
     # Depth crossings: only reachable once top and bottom move independently, and
     # invisible to either plane's signed area on its own.
     crossed = depth_crossings(candidate)
@@ -288,6 +304,12 @@ def check_validity(
     too_close = too_close | proximity_violations(
         candidate, original, min_fraction=min_fraction
     )
+    if active is not None:
+        folded_top = folded_top & active
+        folded_bot = folded_bot & active
+        welded = welded & live_pillar
+        too_close = too_close & live_pillar
+
     n_folded = int(folded_top.sum() + folded_bot.sum())
     n_welded = int(welded.sum())
     n_too_close = int(too_close.sum())
@@ -299,6 +321,8 @@ def check_validity(
 
         sj = np.minimum(scaled_jacobian(candidate.top), scaled_jacobian(candidate.bot))
         degenerate = sj < float(min_scaled_jacobian)
+        if active is not None:
+            degenerate = degenerate & active
         n_degenerate = int(degenerate.sum())
 
     return ValidityReport(
@@ -314,6 +338,21 @@ def check_validity(
         degenerate=degenerate,
         n_degenerate=n_degenerate,
     )
+
+
+def _pillars_of(active: np.ndarray) -> np.ndarray:
+    """``(NX+1, NY+1)`` bool — pillars touching at least one active column.
+
+    A pillar belongs to up to four columns, ``(i-1..i, j-1..j)``. A pillar all of
+    whose columns are dead carries no live geometry, so a weld or a separation
+    violation there is not a defect either.
+    """
+    nx, ny = active.shape
+    out = np.zeros((nx + 1, ny + 1), dtype=bool)
+    for di in (0, 1):
+        for dj in (0, 1):
+            out[di:di + nx, dj:dj + ny] |= active
+    return out
 
 
 def characteristic_length(lattice: PillarLattice) -> np.ndarray:

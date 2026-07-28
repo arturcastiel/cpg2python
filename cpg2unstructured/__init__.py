@@ -63,11 +63,14 @@ from cpg2unstructured.minimal_surface import (
 from cpg2unstructured.morph import (
     MorphResult,
     PillarTargets,
+    ValidityExhausted,
+    ValidityExhaustedWarning,
     laplacian_matrix,
     morph_pillars,
 )
 from cpg2unstructured.pillars import (
     PillarLattice,
+    active_columns,
     apply_displacement,
     boundary_mask,
     local_spacing,
@@ -124,6 +127,7 @@ __all__ = [
     "MapaxesNotInvertedError",
     "PillarLattice",
     "pillar_lattice",
+    "active_columns",
     "boundary_mask",
     "local_spacing",
     "apply_displacement",
@@ -136,6 +140,8 @@ __all__ = [
     "PillarTargets",
     "MorphResult",
     "morph_pillars",
+    "ValidityExhausted",
+    "ValidityExhaustedWarning",
     "DistortionTerms",
     "cell_quads",
     "corner_jacobians",
