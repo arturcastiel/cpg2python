@@ -124,13 +124,23 @@ def compute_face_geometry(
     pa : (n, 4) int64
         Node IDs of A-face corners per connection. Column layout:
 
-        - ``pa[:, 0]`` — A-face bottom corner on pillar 1
-        - ``pa[:, 1]`` — A-face bottom corner on pillar 2
-        - ``pa[:, 2]`` — A-face top corner on pillar 1
-        - ``pa[:, 3]`` — A-face top corner on pillar 2
+        - ``pa[:, 0]`` — A-face corner on pillar 1, SMALLER z
+        - ``pa[:, 1]`` — A-face corner on pillar 2, SMALLER z
+        - ``pa[:, 2]`` — A-face corner on pillar 1, LARGER z
+        - ``pa[:, 3]`` — A-face corner on pillar 2, LARGER z
 
-        ("Bottom" = larger z, "top" = smaller z under Eclipse Z-down
-        convention; but the algorithm is sign-agnostic.)
+        The MRST names for these columns are "bot" and "top", kept below for
+        provenance — but the ORDER is what matters and it is **smaller z
+        first**. The rule in step 1 is
+        ``az[:, 0:2] < bz[:, 0:2] -> pick the larger z``, which selects the
+        inner corner only under that ordering, and
+        ``test_matching_face_produces_clockwise_4_corners`` pins it: ``bot_p1``
+        sits at ``z=0.0`` and ``top_p1`` at ``z=1.0``.
+
+        Passing the columns the other way round does not raise. It silently
+        returns the UNION envelope of the two faces instead of their OVERLAP —
+        for A spanning ``[0, 1]`` against B spanning ``[0.5, 1.5]`` the polygon
+        comes out as ``[0.0, 1.5]`` rather than ``[0.5, 1.0]``.
     pb : (n, 4) int64
         Same for B-face corners.
     points : (n_points, 3) float64

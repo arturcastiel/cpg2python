@@ -289,23 +289,36 @@ def _find_faulted_i_faces(cube: CornerCube) -> tuple[Faces, np.ndarray]:
             [nodes[zb_p1_ids, 2], nodes[zb_p2_ids, 2]], axis=1,
         )
 
-        # Build pa / pb : shape (NZ, 4) with
-        # column order [bot_p1, bot_p2, top_p1, top_p2].
+        # Build pa / pb : shape (NZ, 4).
+        # Column order is [SMALLER-z p1, SMALLER-z p2, LARGER-z p1, LARGER-z p2].
+        # `compute_face_geometry` names those columns "bot" and "top", but its
+        # rule is `az[:, 0:2] < bz[:, 0:2]  ->  pick the LARGER z` for the first
+        # pair, which selects the INNER corner only when that pair holds the
+        # SMALLER z. Its own reference test fixes the meaning: in
+        # test_matching_face_produces_clockwise_4_corners, `bot_p1` sits at
+        # z=0.0 and `top_p1` at z=1.0.
+        #
+        # ZCORN slot 2k is a cell's top (smaller z) and 2k+1 its base (larger z),
+        # so `top_slots` must come FIRST. Passing them the other way round made
+        # every fault polygon the UNION envelope of the two cell faces instead of
+        # their OVERLAP: for A spanning z in [0,1] against B in [0.5,1.5] the
+        # polygon came out as [0.0, 1.5], area 1.5, where the overlap is
+        # [0.5, 1.0], area 0.5 — three times too large.
         pa_stack = np.stack(
             [
-                P[2 * i + 1, 2 * j,     bot_slots],
-                P[2 * i + 1, 2 * j + 1, bot_slots],
                 P[2 * i + 1, 2 * j,     top_slots],
                 P[2 * i + 1, 2 * j + 1, top_slots],
+                P[2 * i + 1, 2 * j,     bot_slots],
+                P[2 * i + 1, 2 * j + 1, bot_slots],
             ],
             axis=1,
         )
         pb_stack = np.stack(
             [
-                P[2 * i + 2, 2 * j,     bot_slots],
-                P[2 * i + 2, 2 * j + 1, bot_slots],
                 P[2 * i + 2, 2 * j,     top_slots],
                 P[2 * i + 2, 2 * j + 1, top_slots],
+                P[2 * i + 2, 2 * j,     bot_slots],
+                P[2 * i + 2, 2 * j + 1, bot_slots],
             ],
             axis=1,
         )
@@ -551,21 +564,35 @@ def _find_faulted_j_faces(cube: CornerCube) -> tuple[Faces, np.ndarray]:
             [nodes[zb_p1_ids, 2], nodes[zb_p2_ids, 2]], axis=1,
         )
 
+        # Column order is [SMALLER-z p1, SMALLER-z p2, LARGER-z p1, LARGER-z p2].
+        # `compute_face_geometry` names those columns "bot" and "top", but its
+        # rule is `az[:, 0:2] < bz[:, 0:2]  ->  pick the LARGER z` for the first
+        # pair, which selects the INNER corner only when that pair holds the
+        # SMALLER z. Its own reference test fixes the meaning: in
+        # test_matching_face_produces_clockwise_4_corners, `bot_p1` sits at
+        # z=0.0 and `top_p1` at z=1.0.
+        #
+        # ZCORN slot 2k is a cell's top (smaller z) and 2k+1 its base (larger z),
+        # so `top_slots` must come FIRST. Passing them the other way round made
+        # every fault polygon the UNION envelope of the two cell faces instead of
+        # their OVERLAP: for A spanning z in [0,1] against B in [0.5,1.5] the
+        # polygon came out as [0.0, 1.5], area 1.5, where the overlap is
+        # [0.5, 1.0], area 0.5 — three times too large.
         pa_stack = np.stack(
             [
-                P[2 * i,     2 * j + 1, bot_slots],
-                P[2 * i + 1, 2 * j + 1, bot_slots],
                 P[2 * i,     2 * j + 1, top_slots],
                 P[2 * i + 1, 2 * j + 1, top_slots],
+                P[2 * i,     2 * j + 1, bot_slots],
+                P[2 * i + 1, 2 * j + 1, bot_slots],
             ],
             axis=1,
         )
         pb_stack = np.stack(
             [
-                P[2 * i,     2 * j + 2, bot_slots],
-                P[2 * i + 1, 2 * j + 2, bot_slots],
                 P[2 * i,     2 * j + 2, top_slots],
                 P[2 * i + 1, 2 * j + 2, top_slots],
+                P[2 * i,     2 * j + 2, bot_slots],
+                P[2 * i + 1, 2 * j + 2, bot_slots],
             ],
             axis=1,
         )
