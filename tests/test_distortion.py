@@ -193,3 +193,75 @@ class TestTerms:
         assert not DistortionTerms(0, 0, 0, 0).any_active()
         assert DistortionTerms(0, 0, 1).any_active()
         assert DistortionTerms(0, 0, 0, 1).any_active()
+
+
+class TestOperatorEnergies:
+    """What actually separates the elastic operator from the Laplacian.
+
+    The docstring used to say elasticity "penalises SHEAR directly" while the
+    Laplacian is "nearly blind to shear". Both halves are false, and these tests
+    pin the truth so the claim cannot drift back.
+    """
+
+    @staticmethod
+    def _lattice(n=10, h=100.0):
+        i, j = np.meshgrid(np.arange(n), np.arange(n), indexing="ij")
+        return np.stack([i * h, j * h], axis=-1).astype(float)
+
+    @staticmethod
+    def _modes(xy):
+        x = xy[..., 0] - xy[..., 0].mean()
+        y = xy[..., 1] - xy[..., 1].mean()
+        z = np.zeros_like(x)
+        return {"rotation": np.stack([-y, x], -1),
+                "shear": np.stack([y, x], -1),
+                "stretch": np.stack([x, z], -1)}
+
+    def _energies(self, xy, mode):
+        from cpg2unstructured.morph import elastic_stiffness, laplacian_matrix
+
+        n = xy.shape[0] * xy.shape[1]
+        L = laplacian_matrix(xy.shape[0], xy.shape[1], xy)
+        v = mode.reshape(-1, 2)
+        e_lap = float(sum(v[:, k] @ (L @ v[:, k]) for k in (0, 1)))
+        out = {"laplacian": e_lap}
+        for nu in (0.0, 0.3, 0.45):
+            K = elastic_stiffness(xy, poisson=nu)
+            w = np.empty(2 * n)
+            w[0::2], w[1::2] = v[:, 0], v[:, 1]
+            out[f"elastic{nu}"] = float(w @ (K @ w))
+        return out
+
+    def test_elastic_charges_nothing_for_a_rigid_rotation(self):
+        """The real difference. A rotation deforms nothing, so strain energy is 0."""
+        xy = self._lattice()
+        e = self._energies(xy, self._modes(xy)["rotation"])
+        shear = self._energies(xy, self._modes(xy)["shear"])
+        for nu in (0.0, 0.3, 0.45):
+            assert abs(e[f"elastic{nu}"]) < 1e-6 * shear[f"elastic{nu}"], e
+
+    def test_the_laplacian_charges_full_price_for_a_rigid_rotation(self):
+        """...and this is what it costs: a rotation is as expensive as a shear."""
+        xy = self._lattice()
+        rot = self._energies(xy, self._modes(xy)["rotation"])["laplacian"]
+        shr = self._energies(xy, self._modes(xy)["shear"])["laplacian"]
+        assert rot == pytest.approx(shr, rel=1e-6), (rot, shr)
+
+    def test_elastic_does_NOT_price_shear_above_the_laplacian(self):
+        """The claim the docstring used to make. It is false."""
+        xy = self._lattice()
+        e = self._energies(xy, self._modes(xy)["shear"])
+        assert e["elastic0.0"] < 3.0 * e["laplacian"]
+        assert e["elastic0.0"] > 0.5 * e["laplacian"]
+
+    def test_raising_poisson_makes_shear_CHEAPER(self):
+        """Which is why skew rises with Poisson rather than falling."""
+        xy = self._lattice()
+        e = self._energies(xy, self._modes(xy)["shear"])
+        assert e["elastic0.0"] > e["elastic0.3"] > e["elastic0.45"]
+
+    def test_raising_poisson_makes_uniaxial_stretch_DEARER(self):
+        """The other side of the same coin: it resists area change instead."""
+        xy = self._lattice()
+        e = self._energies(xy, self._modes(xy)["stretch"])
+        assert e["elastic0.0"] < e["elastic0.3"] < e["elastic0.45"]

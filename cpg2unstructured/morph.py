@@ -730,10 +730,27 @@ def morph_pillars(
     min_fraction
         Minimum surviving pillar separation, as a fraction of the original.
     smoothness
-        ``"elastic"`` (default) minimises linear-elastic strain energy, which
-        penalises SHEAR directly because it couples the x and y components.
-        ``"laplacian"`` penalises the displacement gradient only; it is cheaper to
-        reason about but nearly blind to shear, which shows up as skewed cells.
+        ``"elastic"`` (default) minimises linear-elastic strain energy;
+        ``"laplacian"`` penalises the displacement gradient only.
+
+        The difference is NOT that elasticity prices shear more dearly — measured
+        on a 12x12 lattice, at ``poisson=0`` the two charge a pure shear almost
+        identically (5.76e6 against the Laplacian's 3.12e6, same order), and
+        RAISING Poisson makes shear CHEAPER still (3.73e6 at 0.45), so skew goes
+        up rather than down.
+
+        What separates them is RIGID ROTATION. The Laplacian charges 3.12e6 for a
+        rotation, which deforms nothing at all — the same as it charges for a
+        shear. Elastic strain energy charges 0 (measured: -4e-09, i.e. zero to
+        round-off), because rotation produces no strain. So the elastic operator
+        lets a region turn to follow a fault without paying for it, and spends its
+        budget on the deformation that actually matters.
+
+        Measured consequence on the benchmark: elastic gives 7-12% lower face
+        non-orthogonality on diagonal faults, and RAISES mean skew on 13 of 13
+        traces. If skew is what you care about, the Laplacian is not the worse
+        choice. If non-orthogonality is — which is what a two-point flux scheme
+        pays for — elastic is.
     poisson
         Poisson's ratio for the elastic operator. ``0.0`` lets cells change area
         freely, ``0.3`` is a good default, and values toward ``0.5`` increasingly
