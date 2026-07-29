@@ -121,6 +121,13 @@ def face_edges(grid: UnstructuredGrid, edges: np.ndarray | None = None) -> np.nd
     A quad face has 6 node-pairs: its 4 sides (which ARE mesh edges) and its 2
     diagonals (which are not). We keep the 4 that appear in ``edges``. Result is
     (Nf, 4) int64, edge ids ascending per row.
+
+    .. note::
+       Genuine quads only. A 3-corner fault polygon stored as the degenerate
+       quad ``(a, b, c, c)`` (see ``unstructured._polygons_to_quads``) has 3
+       sides, not 4, and so raises below. Widening ∂₂ to mixed tri/quad faces
+       is the same ``(Nf, 4)`` shape decision as ``cell_faces`` being
+       ``(Ncells, 6)`` and is deliberately NOT taken here.
     """
     if edges is None:
         edges = mesh_edges(grid)
@@ -134,7 +141,11 @@ def face_edges(grid: UnstructuredGrid, edges: np.ndarray | None = None) -> np.nd
     eid, found = _lookup_edge_ids(edges, cand_key, nn)
     if not (found.sum(axis=1) == 4).all():
         bad = int((found.sum(axis=1) != 4).sum())
-        raise ValueError(f"{bad} face(s) did not resolve to exactly 4 edges")
+        raise ValueError(
+            f"{bad} face(s) did not resolve to exactly 4 edges — a "
+            "degenerate quad (a, b, c, c) encoding a 3-corner fault polygon "
+            "has only 3; ∂₂ is quad-only"
+        )
 
     eid.sort(axis=1)
     return eid[:, :4].astype(np.int64, copy=False)
@@ -170,7 +181,11 @@ def oriented_face_edges(
     _, found = _lookup_edge_ids(edges, cand_key, nn)
     if not (found.sum(axis=1) == 4).all():
         bad = int((found.sum(axis=1) != 4).sum())
-        raise ValueError(f"{bad} face(s) did not resolve to exactly 4 edges")
+        raise ValueError(
+            f"{bad} face(s) did not resolve to exactly 4 edges — a "
+            "degenerate quad (a, b, c, c) encoding a 3-corner fault polygon "
+            "has only 3; ∂₂ is quad-only"
+        )
 
     # Combos 0,1,2 are (0,1),(0,2),(0,3) → partners 1,2,3. Corner 0 lies on
     # exactly one diagonal, so exactly one of these is not an edge; argmin picks

@@ -76,6 +76,32 @@ def face_geometry(
     row = np.arange(N)
     d1 = v[row, diag1[:, 1]] - v[row, diag1[:, 0]]      # (N, 3)
     d2 = v[row, diag2[:, 1]] - v[row, diag2[:, 0]]      # (N, 3)
+
+    # A 3-corner fault polygon is stored as the DEGENERATE quad (a, b, c, c)
+    # (see `unstructured._polygons_to_quads`). Both formulas above are wrong on
+    # such a row: the mean centroid double-counts `c`, and the two "longest
+    # distances" are the SAME edge twice whenever the repeated vertex sits on
+    # the longest one, so `cross_d` vanishes and the face reports zero area.
+    # Measured on Norne's i=4-5, j=2 fault stack: 22 triangles out of 22 came
+    # back zero-area — a real 39,624 m² face silently losing all
+    # transmissibility. `faces.nodes` is sorted, so a repeat is always an
+    # ADJACENT pair; drop it and use the genuine triangle.
+    fid = faces.nodes
+    dup01 = fid[:, 0] == fid[:, 1]
+    dup12 = fid[:, 1] == fid[:, 2]
+    degenerate = dup01 | dup12 | (fid[:, 2] == fid[:, 3])
+    if degenerate.any():
+        tri_idx = np.where(
+            dup01[:, None], np.array([1, 2, 3]),
+            np.where(dup12[:, None], np.array([0, 1, 3]), np.array([0, 1, 2])),
+        )                                               # (N, 3) local positions
+        tri = np.take_along_axis(v, tri_idx[:, :, None], axis=1)   # (N, 3, 3)
+        centroids = np.where(
+            degenerate[:, None], tri.mean(axis=1), centroids,
+        )
+        d1 = np.where(degenerate[:, None], tri[:, 1] - tri[:, 0], d1)
+        d2 = np.where(degenerate[:, None], tri[:, 2] - tri[:, 0], d2)
+
     cross_d = np.cross(d1, d2)                          # (N, 3)
     norm_len = np.linalg.norm(cross_d, axis=1)
     areas = 0.5 * norm_len

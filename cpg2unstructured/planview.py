@@ -124,6 +124,17 @@ def projected_topology(
                 f"pillar_of_node must have one entry per node "
                 f"({grid.nodes.shape[0]}); got {pon.shape[0]}"
             )
+        # -1 = "no pillar owns this node": an unvisited corner-cube slot, or a
+        # fault intersection node appended by build_topology, which lies on no
+        # pillar by construction. np.unique would weld every such node into ONE
+        # projected node — a grid-wide false weld. Give each its own key so it
+        # keeps a distinct identity.
+        free = pon < 0
+        if free.any():
+            pon = pon.copy()
+            pon[free] = (
+                int(pon.max(initial=-1)) + 1 + np.arange(int(free.sum()))
+            )
         uniq, inverse = np.unique(pon, return_inverse=True)
         node_of_grid_node = inverse.astype(np.int64, copy=False).ravel()
         # representative position: the mean of the column's nodes

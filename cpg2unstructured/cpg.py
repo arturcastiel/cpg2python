@@ -189,7 +189,7 @@ def from_grdecl(g: Grdecl, pinch_tol: float = 0.0) -> CornerCube:
     )
 
 
-def pillar_of_node(cube: CornerCube) -> np.ndarray:
+def pillar_of_node(cube: CornerCube, n_nodes: int | None = None) -> np.ndarray:
     """``(Nnodes,)`` int64 — the flat pillar index ``i*(NY+1) + j`` owning each node.
 
     Corner-cube slot ``(2i+di, 2j+dj, 2k+dk)`` sits on pillar ``(i+di, j+dj)``, i.e.
@@ -199,8 +199,20 @@ def pillar_of_node(cube: CornerCube) -> np.ndarray:
     This is the IDENTITY-based answer to "which nodes are the same pillar?".
     Collapsing by coordinate equality instead — as ``projected_topology`` did — only
     works while pillars are vertical, because a tilted pillar's corners have
-    different ``(x, y)`` at every layer and so never collapse. Nodes never visited
-    (inactive or pinched-out slots) are left as ``-1``.
+    different ``(x, y)`` at every layer and so never collapse.
+
+    ``-1`` means **no pillar owns this node**, and there are two ways to earn it:
+
+    - a corner-cube slot never visited (inactive or pinched-out cell);
+    - a node that is not a corner-cube slot at all. ``build_topology`` grows the
+      node table with fault *intersection* nodes — where a fault cuts an edge
+      between two cell corners — and those lie on no pillar by construction.
+
+    ``n_nodes`` extends the output to that length, padding with ``-1``. Pass
+    ``grid.nodes.shape[0]`` when pairing this with a grid from ``build_topology``
+    on a faulted deck, whose node table is longer than ``cube.nodes``. Consumers
+    must treat ``-1`` as "distinct identity", never as one group to weld
+    together — see ``planview.projected_topology``.
     """
     nx, ny, _ = cube.cart_dims
     P = cube.P
@@ -208,7 +220,9 @@ def pillar_of_node(cube: CornerCube) -> np.ndarray:
     b = (np.arange(P.shape[1]) + 1) // 2
     flat = (a[:, None] * (ny + 1) + b[None, :])[:, :, None]
     flat = np.broadcast_to(flat, P.shape)
-    out = np.full(cube.nodes.shape[0], -1, dtype=np.int64)
+    n_cube = cube.nodes.shape[0]
+    out = np.full(n_cube if n_nodes is None else max(n_nodes, n_cube),
+                  -1, dtype=np.int64)
     seen = P >= 0
     out[P[seen]] = flat[seen]
     return out
