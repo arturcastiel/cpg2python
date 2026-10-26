@@ -23,6 +23,12 @@ Faulted grids are now topologically and geometrically correct.
   wedges) that picked a side and gave the wrong area. It now picks the
   pairing with the largest |d1 × d2|. This also fixes wedge-cell volumes
   next to pinch-outs.
+- **GRDECL reader: multi-record and data-less keywords.** Unknown
+  keywords were skipped by reading one `/`-terminated record. FAULTS,
+  MULTFLT, EQUALS, … (several records closed by an empty `/`) left stray
+  tokens and raised `GrdeclSyntaxError`; section headers such as `GRID`
+  or `EDIT` (no data) silently swallowed the next keyword. Both are now
+  skipped correctly and still listed in `Grdecl.unrecognized`.
 
 ### Changed
 - **Exposed fault pieces** — the part of a cell's fault side that faces

@@ -52,6 +52,52 @@ def test_unknown_keyword_collected_not_raised(tmp_path):
     assert g.cart_dims == (1, 1, 1)
 
 
+_UNIT_GRID = (
+    "SPECGRID\n 1 1 1 1 F /\n"
+    "COORD\n  0 0 0  0 0 1   1 0 0  1 0 1   0 1 0  0 1 1   1 1 0  1 1 1 /\n"
+    "ZCORN\n  4*0  4*1 /\n"
+)
+
+
+def test_multi_record_keywords_skipped_to_empty_slash(tmp_path):
+    """FAULTS / MULTFLT hold several records closed by an empty `/`.
+    Reading only the first record left `'F2' ...` as a stray token."""
+    p = tmp_path / "deck.grdecl"
+    p.write_text(
+        _UNIT_GRID
+        + "FAULTS\n"
+        "-- NAME IX1 IX2 IY1 IY2 IZ1 IZ2 FACE\n"
+        "  'F1'  1 1  1 1  1 1  'X' /\n"
+        "  'F2'  1 1  1 1  1 1  'Y' /\n"
+        "/\n"
+        "MULTFLT\n  'F1' 0.1 /\n  'F2' 1* /\n/\n"
+        "PORO\n  0.25 /\n"
+    )
+    g = read_grdecl(p)
+    assert g.unrecognized == ["FAULTS", "MULTFLT"]
+    np.testing.assert_array_equal(g.props["PORO"], [0.25])
+
+
+def test_no_data_keywords_do_not_swallow_next_keyword(tmp_path):
+    """Section headers carry no data and no `/`; skipping them as a
+    one-record keyword silently ate the next keyword (COORD, PORO)."""
+    p = tmp_path / "deck.grdecl"
+    p.write_text(
+        "GRID\nNOECHO\n" + _UNIT_GRID + "ECHO\nEDIT\nPROPS\nPORO\n  0.25 /\n"
+    )
+    g = read_grdecl(p)
+    assert g.coord.shape == (4, 6)
+    np.testing.assert_array_equal(g.props["PORO"], [0.25])
+    assert g.unrecognized == ["GRID", "NOECHO", "ECHO", "EDIT", "PROPS"]
+
+
+def test_multi_record_keyword_missing_closing_slash_raises(tmp_path):
+    p = tmp_path / "deck.grdecl"
+    p.write_text(_UNIT_GRID + "FAULTS\n  'F1' 1 1 1 1 1 1 'X' /\n")
+    with pytest.raises(GrdeclSyntaxError, match="missing `/` terminator"):
+        read_grdecl(p)
+
+
 def test_dimens_specgrid_mismatch_raises(tmp_path):
     p = tmp_path / "bad.grdecl"
     p.write_text(

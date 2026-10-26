@@ -32,6 +32,23 @@ _PROP_KEYWORDS_INT = frozenset({
     "SATNUM", "PVTNUM", "EQLNUM", "FIPNUM",
 })
 
+# Keywords made of several `/`-terminated records, closed by an empty `/`.
+_MULTI_RECORD_KEYWORDS = frozenset({
+    "FAULTS", "MULTFLT",
+    "EQUALS", "COPY", "ADD", "MULTIPLY", "MINVALUE", "MAXVALUE",
+    "OPERATE", "OPERATER",
+    "EQUALREG", "ADDREG", "MULTIREG", "COPYREG",
+    "MULTREGT", "MULTREGP", "EDITNNC", "NNC",
+})
+
+# Keywords with no data and no `/` (section headers, switches).
+_NO_DATA_KEYWORDS = frozenset({
+    "RUNSPEC", "GRID", "EDIT", "PROPS", "REGIONS", "SOLUTION", "SUMMARY",
+    "SCHEDULE", "END",
+    "ECHO", "NOECHO", "ENDBOX", "INIT", "NEWTRAN", "OLDTRAN", "NONNC",
+    "NOGGF",
+})
+
 
 # `Grdecl` (the dataclass) now lives in cpg2unstructured.corner_point as
 # `CornerPointGrid`. The name `Grdecl` is re-exported above as a TypeAlias.
@@ -62,6 +79,12 @@ def _read_block(tokens: Iterator[str]) -> list[str]:
             return block
         block.append(tok)
     raise GrdeclSyntaxError("unexpected EOF (missing `/` terminator)")
+
+
+def _skip_records(tokens: Iterator[str]) -> None:
+    """Consume records up to the empty `/` that closes a multi-record keyword."""
+    while _read_block(tokens):
+        pass
 
 
 def _kw_dimens(toks: list[str]) -> tuple[int, int, int]:
@@ -175,7 +198,10 @@ def _parse_stream(
                     )
                 state.props_int[kw] = arr
             elif kw.isalpha() and kw == kw.upper() and len(kw) <= 8:
-                _read_block(tokens)
+                if kw in _MULTI_RECORD_KEYWORDS:
+                    _skip_records(tokens)
+                elif kw not in _NO_DATA_KEYWORDS:
+                    _read_block(tokens)
                 if kw not in state.unrecognized:
                     state.unrecognized.append(kw)
             else:
@@ -258,7 +284,9 @@ def read_grdecl(path: str | Path) -> Grdecl:
     directive. A re-include of an already-open file raises
     `GrdeclIncludeError`. Property keywords (PORO / PERMX / SATNUM / ...)
     populate `Grdecl.props`; unknown keywords still land in
-    `Grdecl.unrecognized`.
+    `Grdecl.unrecognized`. Multi-record keywords (FAULTS, MULTFLT,
+    EQUALS, ...) are skipped up to their closing empty `/`; data-less
+    keywords (GRID, EDIT, ECHO, ENDBOX, ...) consume nothing.
     """
     root = Path(path).resolve()
     state = _State()
