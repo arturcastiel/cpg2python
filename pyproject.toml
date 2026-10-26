@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cpg2unstructured"
-version = "0.2.0"
+version = "0.3.0"
 description = "Lightweight CPG (Eclipse corner-point) to unstructured-mesh + graph"
 readme = "README.md"
 requires-python = ">=3.10"

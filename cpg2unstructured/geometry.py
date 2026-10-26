@@ -61,23 +61,35 @@ def face_geometry(
     centroids = v.mean(axis=1)
     N = v.shape[0]
 
-    # Faces.nodes is sorted by node ID, NOT in
-    # spatial cyclic order. Triangle-fan from vertex 0 only works for
-    # cyclic-ordered quads. For arbitrary vertex order on a planar
-    # convex quad, area = (1/2) |d1 × d2| where d1, d2 are the two
-    # diagonals. Diagonals are the 2 longest of the 6 pairwise
-    # distances.
-    PAIRS = np.array([[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]])
-    diff = v[:, PAIRS[:, 0]] - v[:, PAIRS[:, 1]]        # (N, 6, 3)
-    dists_sq = (diff ** 2).sum(axis=-1)                 # (N, 6)
-    top2 = np.argsort(dists_sq, axis=1)[:, -2:]         # (N, 2)
-    diag1 = PAIRS[top2[:, 0]]                           # (N, 2)
-    diag2 = PAIRS[top2[:, 1]]
+    # A triangular fault face is stored with one node repeated; its
+    # centroid is the mean of its 3 distinct corners. Sorted ids make
+    # repeats adjacent.
+    fn = faces.nodes
+    distinct = np.ones(fn.shape, dtype=bool)
+    distinct[:, 1:] = fn[:, 1:] != fn[:, :-1]
+    tri = ~distinct.all(axis=1)
+    if tri.any():
+        w = distinct[tri][..., None]
+        centroids[tri] = (v[tri] * w).sum(axis=1) / w.sum(axis=1)
+
+    # Faces.nodes is sorted by node ID, NOT in spatial cyclic order, so
+    # the diagonals are unknown. For a planar quad, area = (1/2)|d1 × d2|
+    # over its two diagonals. Each of the 3 ways to split the 4 vertices
+    # into two pairs is a candidate; the true diagonals give the largest
+    # |d1 × d2| (the other two pairings trace self-crossing bow-ties).
+    # This also gives the right area for a triangle with a repeated node.
+    # (Picking the 2 longest pairwise distances, as before, fails on
+    # trapezoids: a long parallel side can beat the short diagonal.)
+    DIAGS = ((0, 2, 1, 3), (0, 3, 1, 2), (0, 1, 2, 3))
+    crosses = np.stack(
+        [np.cross(v[:, b] - v[:, a], v[:, d] - v[:, c]) for a, b, c, d in DIAGS],
+        axis=1,
+    )                                                   # (N, 3, 3)
+    lens = np.linalg.norm(crosses, axis=-1)             # (N, 3)
+    best = lens.argmax(axis=1)
     row = np.arange(N)
-    d1 = v[row, diag1[:, 1]] - v[row, diag1[:, 0]]      # (N, 3)
-    d2 = v[row, diag2[:, 1]] - v[row, diag2[:, 0]]      # (N, 3)
-    cross_d = np.cross(d1, d2)                          # (N, 3)
-    norm_len = np.linalg.norm(cross_d, axis=1)
+    cross_d = crosses[row, best]                        # (N, 3)
+    norm_len = lens[row, best]
     areas = 0.5 * norm_len
     safe_len = np.where(norm_len < 1e-15, 1.0, norm_len)   #  guard
     normals = cross_d / safe_len[:, None]
@@ -111,6 +123,8 @@ def cell_geometry(
     Volume:    V_c = (1/3) Σ_f sign · (centroid_f · normal_f) · area_f
     Centroid:  c   = (1/(4V)) Σ_f sign · centroid_f · (centroid_f · normal_f) · area_f
     sign = +1 iff `faces.neighbours[f, 0] == c`, else -1.
+    Negative entries in `cell_faces` (the padding of cells with more
+    than one face on a fault side) are skipped.
     """
     n_cells = cell_faces.shape[0]
     volumes = np.zeros(n_cells, dtype=np.float64)
@@ -127,6 +141,8 @@ def cell_geometry(
         c_sum = np.zeros(3, dtype=np.float64)
         for f in face_ids:
             f = int(f)
+            if f < 0:
+                continue
             sign = 1.0 if nb[f, 0] == c else -1.0
             cn = float(fc[f] @ fn[f])
             contrib = sign * cn * fa[f]

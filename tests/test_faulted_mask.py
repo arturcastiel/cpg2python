@@ -100,12 +100,12 @@ def test_find_i_faces_dispatches_on_faulted_fixture(fixtures):
     # i-pair, both j-rows). All inner i-faces in faulted stacks become
     # fault-faces; boundary i-faces stay as matching-Z.
     # · matching: 2 boundary i-planes × 2 j × 2 k = 8 boundary faces
-    # · fault:    2 j-stacks × 3 connections = 6 fault faces
-    # Total: 14 i-faces.
-    assert faces.nodes.shape == (14, 4)
-    assert faces.neighbours.shape == (14, 2)
+    # · fault:    2 j-stacks × (3 connections + 2 exposed pieces) = 10
+    # Total: 18 i-faces.
+    assert faces.nodes.shape == (18, 4)
+    assert faces.neighbours.shape == (18, 2)
     np.testing.assert_array_equal(faces.direction,
-                                  np.zeros(14, dtype=np.int8))
+                                  np.zeros(18, dtype=np.int8))
 
 
 def test_find_j_faces_no_raise_on_faulted_fixture(fixtures):

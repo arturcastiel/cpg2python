@@ -51,21 +51,23 @@ def test_with_include_no_fault_returns_empty(fixtures):
 
 def test_simple_faulted_2x2x2_produces_3_fault_faces(fixtures):
     """The §6b worked example: 2 A-cells × 2 B-cells (half-cell
-    offset between i=0 and i=1) produces 3 connections per j-stack.
+    offset between i=0 and i=1) produces 3 connections per j-stack,
+    plus 2 exposed boundary pieces (A0 on z∈[0,0.5], B1 on z∈[2,2.5]).
 
-    The fixture has 2 j-stacks (j=0 and j=1), so total = 6 fault faces."""
+    The fixture has 2 j-stacks (j=0 and j=1): 6 inner + 4 boundary."""
     g = read_grdecl(fixtures / "simple_faulted_2x2x2.grdecl")
     cube = from_grdecl(g)
     faces, new_nodes = _find_faulted_i_faces(cube)
 
-    # 2 j-stacks × 3 connections per stack = 6 fault faces total
-    assert faces.nodes.shape == (6, 4), (
-        f"expected 6 fault faces (3 per j-stack), got {faces.nodes.shape}"
+    # 2 j-stacks × (3 connections + 2 exposed pieces) = 10 fault faces
+    assert faces.nodes.shape == (10, 4), (
+        f"expected 10 fault faces (5 per j-stack), got {faces.nodes.shape}"
     )
-    assert faces.neighbours.shape == (6, 2)
-    assert faces.direction.shape == (6,)
+    assert faces.neighbours.shape == (10, 2)
+    assert faces.direction.shape == (10,)
+    assert int((faces.neighbours[:, 1] != -1).sum()) == 6
     # All i-direction
-    np.testing.assert_array_equal(faces.direction, np.zeros(6, dtype=np.int8))
+    np.testing.assert_array_equal(faces.direction, np.zeros(10, dtype=np.int8))
 
     # No intersection nodes appended (4-corner polygons use only pillar
     # corners —  restriction enforced).

@@ -131,7 +131,8 @@ parts = grid.split()    # list[UnstructuredGrid], one per component
 ```python
 grid.nodes          # (Nnodes, 3) float64 — unique XYZ
 grid.faces          # Faces: nodes (N,4), neighbours (N,2), direction (N,)
-grid.cell_faces     # (Ncells, 6) int64 — face ids: [i-, i+, j-, j+, k-, k+]
+grid.cell_faces     # (Ncells, 6+E) int64 — [i-, i+, j-, j+, k-, k+], then extra
+                    #   fault faces; -1 = unused (E = 0 without faults)
 grid.cell_corners   # (Ncells, 8) int64 — node ids per cell
 grid.original_ijk   # (Ncells, 3) int64 — Eclipse-natural (i, j, k)
 grid.nnc            # (M, 2) int64 — non-neighbour connections
@@ -146,6 +147,9 @@ grid.split()        # list[UnstructuredGrid] — one per component
 ## Limitations
 
 - **k-direction faults** raise `NonMatchingZError` (i/j fault dispatch only).
+- Faulted pillar stacks must be fully active; fault polygons with 5+
+  corners raise `NonMatchingZError`.
+- `mesh3d.face_edges` (∂₂ chain complex) does not support faulted grids.
 - No transmissibility, well models, or property algebra.
 - EGRID coverage: root grid only — LGR sub-grids and INIT/UNRST property
   pass-through are explicit non-goals.

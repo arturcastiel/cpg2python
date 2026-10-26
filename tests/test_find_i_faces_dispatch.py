@@ -57,10 +57,12 @@ def test_simple_faulted_2x2x2_total_i_face_count(fixtures):
     faces = find_i_faces(cube)
     # 2x2x2 with i-fault at the single inner i-plane:
     #   boundary i-faces (i-plane 0 and i-plane 2): 2 × 2 × 2 = 8
-    #   fault i-faces (i-plane 1): 2 j-stacks × 3 conns/stack = 6
-    # Total: 14
-    assert faces.nodes.shape == (14, 4)
-    assert faces.neighbours.shape == (14, 2)
+    #   fault i-faces (i-plane 1): 2 j-stacks × 5 faces/stack = 10
+    #     per stack: 3 inner (A0-B0, A1-B0, A1-B1) + 2 exposed
+    #     boundary pieces (A0 on z∈[0,0.5], B1 on z∈[2,2.5])
+    # Total: 18
+    assert faces.nodes.shape == (18, 4)
+    assert faces.neighbours.shape == (18, 2)
 
 
 def test_simple_faulted_2x2x2_all_node_ids_valid(fixtures):
@@ -89,15 +91,14 @@ def test_simple_faulted_2x2x2_inner_faces_have_two_cells(fixtures):
     cube = from_grdecl(g)
     faces = find_i_faces(cube)
     inner_mask = faces.neighbours[:, 1] != -1
-    # 6 fault faces + 4 matching inner faces?
-    # Actually no — in this fixture both inner i-planes are faulted,
-    # so there are NO matching inner i-faces; all 6 inner faces are fault.
-    # Boundary i-faces = 8 (4 cells on each grid boundary × 2 boundaries).
-    # Wait: 2 boundaries (left + right) × 2 j × 2 k = 8 boundary faces.
+    # The only inner i-plane is faulted, so all 6 inner faces are fault
+    # faces (3 per j-stack). Boundary faces: 8 on the two grid
+    # boundary planes (2 × 2 j × 2 k) + 4 exposed fault pieces
+    # (2 per j-stack).
     n_inner = int(inner_mask.sum())
     n_boundary = int(faces.nodes.shape[0] - n_inner)
     assert n_inner == 6   # all 6 are fault faces from the dispatcher
-    assert n_boundary == 8
+    assert n_boundary == 12
 
 
 def test_simple_faulted_2x2x2_neighbour_col0_smaller(fixtures):

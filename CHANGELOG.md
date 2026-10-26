@@ -6,6 +6,46 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-10-26
+
+Faulted grids are now topologically and geometrically correct.
+
+### Fixed
+- **Fault-aware topology.** `build_topology` used to emit the raw
+  same-k i/j face *and* the fault faces for a faulted pillar stack, so
+  cells across a fault were wrongly paired by k index. Those raw faces
+  are now dropped and replaced by the fault faces (matched on Z
+  overlap), so faulted cells close (Σ area·n = 0) and have exact
+  volumes.
+- **Face area / normal on non-rectangular quads.** `face_geometry`
+  assumed the two longest node-pair distances are the diagonals; on
+  trapezoids and sheared quads (j-faces next to tilted pillars, pinch-out
+  wedges) that picked a side and gave the wrong area. It now picks the
+  pairing with the largest |d1 × d2|. This also fixes wedge-cell volumes
+  next to pinch-outs.
+
+### Changed
+- **Exposed fault pieces** — the part of a cell's fault side that faces
+  no cell across the fault (throw at the top or bottom of the stack) is
+  now a boundary face (`neighbours[:, 1] == -1`).
+- **`cell_faces` is padded.** A faulted cell can have more than one face
+  on an i/j side, so `cell_faces` is `(Ncells, 6 + E)`: the first 6
+  columns keep the `[i-, i+, j-, j+, k-, k+]` slots, extra faces go in
+  columns 6+, and unused entries are `-1`. Grids without faults keep
+  the old `(Ncells, 6)` shape and values. `split()` keeps the padding
+  and trims columns a sub-grid does not need.
+- **Triangular faces.** A 3-corner fault polygon (fault tip) is stored
+  as a quad with its last node repeated; `face_geometry` handles it.
+- `cell_geometry` skips `-1` entries in `cell_faces`.
+
+### Known limitations
+- Faulted stacks must be fully active (inactive cells raise
+  `NonMatchingZError`), and fault polygons with 5+ corners or crossing
+  pillar lines raise `NonMatchingZError`.
+- k-direction faults still raise `NonMatchingZError`.
+- `mesh3d.face_edges` (the ∂₂ chain complex) needs hex-edge faces and
+  raises `ValueError` on faulted grids.
+
 ### Documentation
 - README gained a **Grid input** section showing text-GRDECL vs binary
   EGRID side by side (PR-102).

@@ -1,7 +1,7 @@
 # cpg2unstructured — Tutorial
 
 **Main author:** Dr. Artur Castiel Reis de Souza
-**Applies to:** cpg2unstructured **v0.2.0**
+**Applies to:** cpg2unstructured **v0.3.0**
 
 A formal, worked walkthrough of the library: how to turn an Eclipse
 corner-point geometry (CPG) `.grdecl` deck into an unstructured mesh +
@@ -60,7 +60,7 @@ print(grid.cart_dims, grid.n_cells)               # e.g. (5, 5, 3)  70
 | `faces.nodes` | `(Nfaces, 4)` | node ids per face (sorted) |
 | `faces.neighbours` | `(Nfaces, 2)` | adjacent cell ids; boundary → `-1` in col 1 |
 | `faces.direction` | `(Nfaces,)` | `0`=i, `1`=j, `2`=k |
-| `cell_faces` | `(Ncells, 6)` | the 6 face ids of each cell |
+| `cell_faces` | `(Ncells, 6+E)` | face ids: slots `[i-, i+, j-, j+, k-, k+]`, then extra fault faces (`-1` = unused; `E = 0` without faults) |
 | `cell_corners` | `(Ncells, 8)` | the 8 node ids of each cell |
 | `original_ijk` | `(Ncells, 3)` | Eclipse `(i, j, k)` each cell came from |
 | `nnc` | `(M, 2)` | non-neighbour connections (see §5) |
@@ -87,10 +87,15 @@ grid = build_topology(from_grdecl(g))
 
 Where a cell straddles two cells across the fault, you get the expected
 extra faces — e.g. a +0.6 offset on unit cells yields **3** connections
-per faulted pillar stack, not 2.
+per faulted pillar stack, not 2. Since v0.3.0 the parts of a fault side
+that face no cell (the throw at the top/bottom of the stack) are
+boundary faces, so every faulted cell is closed. A cell with several
+faces on one side lists the extras in `cell_faces[:, 6:]`.
 
 > **Limitation.** k-direction faults still raise `NonMatchingZError`
 > (the 2-pillar sweep does not apply to the 4-pillar k-face geometry).
+> Faulted pillar stacks must be fully active, and `mesh3d.face_edges`
+> does not support faulted grids.
 
 ---
 

@@ -152,3 +152,35 @@ def test_geometry_dataclass_fields(unit_cube_mesh):
     assert fg.normals.dtype == np.float64
     assert cg.centroids.dtype == np.float64
     assert cg.volumes.dtype == np.float64
+
+
+def _single_face_geometry(points, quad):
+    """face_geometry on one face; a 5th point is the cell-centre stand-in."""
+    from cpg2unstructured import Faces
+    nodes = np.vstack([points, [[-1.0, -1.0, -1.0]]])
+    faces = Faces(
+        nodes=np.array([sorted(quad)], dtype=np.int64),
+        neighbours=np.array([[0, -1]], dtype=np.int64),
+        direction=np.array([1], dtype=np.int8),
+    )
+    cell_corners = np.full((1, 8), nodes.shape[0] - 1, dtype=np.int64)
+    return face_geometry(nodes, faces, cell_corners)
+
+
+def test_trapezoid_face_area():
+    """Parallel sides 1 and 3, height 1 → area 2. A long parallel side
+    (3) beats the short diagonal (√2), so the diagonals are not the two
+    longest node pairs — as on j-faces next to tilted pillars."""
+    pts = np.array([[0, 0, 0], [1, 0, 0], [0, 0, 1], [3, 0, 1]], dtype=float)
+    fg = _single_face_geometry(pts, [0, 1, 2, 3])
+    assert fg.areas[0] == pytest.approx(2.0)
+    np.testing.assert_allclose(np.abs(fg.normals[0]), [0, 1, 0])
+
+
+def test_triangle_face_with_repeated_node():
+    """A triangular fault face is stored as a quad with one node
+    repeated: legs 1 and 1 → area 0.5, centroid at the vertex mean."""
+    pts = np.array([[0, 0, 0], [1, 0, 0], [0, 0, 1]], dtype=float)
+    fg = _single_face_geometry(pts, [0, 1, 2, 2])
+    assert fg.areas[0] == pytest.approx(0.5)
+    np.testing.assert_allclose(fg.centroids[0], [1 / 3, 0, 1 / 3])

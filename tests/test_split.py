@@ -57,3 +57,45 @@ def test_split_subgrids_are_structurally_valid(fixtures):
         assert p.faces.neighbours.max() < p.n_cells
         # each island has an internal i-face (the 2 cells are adjacent)
         assert (p.faces.neighbours[:, 1] != -1).any()
+
+
+def _faulted_islands_deck(tmp_path):
+    """4x1x2, vertical unit pillars. Column i=2 is inactive, splitting
+    the grid in two. Column i=1 is offset +0.5 in z, so the left island
+    has a fault and padded cell_faces; the right island (i=3) has none."""
+    nx, ny, nz = 4, 1, 2
+    coord = []
+    for j in range(ny + 1):
+        for i in range(nx + 1):
+            coord += [i, j, 0, i, j, 3]
+    zcorn = []
+    for ks in range(2 * nz):
+        z = ks // 2 + ks % 2
+        for _ in range(2 * ny):
+            for i_slot in range(2 * nx):
+                zcorn.append(z + (0.5 if i_slot // 2 == 1 else 0.0))
+    text = (
+        f"SPECGRID\n {nx} {ny} {nz} 1 F /\n"
+        "COORD\n " + " ".join(map(str, coord)) + " /\n"
+        "ZCORN\n " + " ".join(map(str, zcorn)) + " /\n"
+        "ACTNUM\n 1 1 0 1  1 1 0 1 /\n"
+    )
+    p = tmp_path / "faulted_islands.grdecl"
+    p.write_text(text)
+    return p
+
+
+def test_split_keeps_fault_padding(tmp_path):
+    """Padding (-1) in cell_faces must survive the face-id remap, and
+    every face id a cell lists must be a face of that cell."""
+    grid = build_topology(from_grdecl(read_grdecl(_faulted_islands_deck(tmp_path))))
+    assert grid.cell_faces.shape == (6, 7)
+    left, right = grid.split()
+    assert left.cell_faces.shape == (4, 7)
+    assert right.cell_faces.shape == (2, 6)       # unused padding trimmed
+    for p in (left, right):
+        assert (p.cell_faces[:, :6] >= 0).all()
+        assert p.cell_faces.max() < p.faces.nodes.shape[0]
+        for c, row in enumerate(p.cell_faces):
+            for f in row[row >= 0]:
+                assert c in p.faces.neighbours[f]

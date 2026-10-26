@@ -81,15 +81,17 @@ def test_fault_dispatches_in_find_i_faces():
 . The single-corner Z mismatch flags one i-pillar stack
     as faulted; the dispatcher drops the matching inner faces in that
     stack and emits replacement fault faces from _find_faulted_i_faces.
-    Total i-face count is preserved (single-corner mismatch produces
-    the same number of inner faces, just via the fault path)."""
+    The moved corner also opens a triangular gap on the A side, which
+    comes out as one extra (exposed) boundary face."""
     cube = from_grdecl(read_grdecl(FIXTURES / "fault_simple.grdecl"))
     faces = find_i_faces(cube)
     # 2x2x2 all-active: 3 i-planes × 2 j × 2 k = 12 i-faces total.
-    # The fault path produces 2 fault faces (single faulted stack, 2
-    # connections) in place of 2 matching inner faces. Net: 12.
-    assert faces.nodes.shape == (12, 4)
-    assert faces.neighbours.shape == (12, 2)
+    # The fault path produces 2 inner fault faces (single faulted stack,
+    # 2 connections) in place of 2 matching inner faces, plus 1
+    # triangular exposed piece. Net: 13.
+    assert faces.nodes.shape == (13, 4)
+    assert faces.neighbours.shape == (13, 2)
+    assert int((faces.neighbours[:, 1] == -1).sum()) == 9
 
 
 def test_actnum_excludes_inactive_face(tmp_path):

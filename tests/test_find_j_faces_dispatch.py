@@ -51,13 +51,14 @@ def test_with_include_byte_identical_post_dispatch_j(fixtures):
 def test_simple_faulted_2x2x2_j_total_j_face_count(fixtures):
     """Mirror of simple_faulted_2x2x2 along j-axis:
        boundary j-faces (j-plane 0 and j-plane 2): 2 × 2 × 2 = 8
-       fault j-faces  (j-plane 1, 2 i-stacks × 3 conns each): 6
-       Total: 14 j-faces."""
+       fault j-faces  (j-plane 1, 2 i-stacks × 5 faces each): 10
+         per stack: 3 inner + 2 exposed boundary pieces
+       Total: 18 j-faces."""
     g = read_grdecl(fixtures / "simple_faulted_2x2x2_j.grdecl")
     cube = from_grdecl(g)
     faces = find_j_faces(cube)
-    assert faces.nodes.shape == (14, 4)
-    assert faces.neighbours.shape == (14, 2)
+    assert faces.nodes.shape == (18, 4)
+    assert faces.neighbours.shape == (18, 2)
 
 
 def test_simple_faulted_2x2x2_j_all_node_ids_valid(fixtures):
@@ -86,7 +87,7 @@ def test_simple_faulted_2x2x2_j_inner_faces_have_two_cells(fixtures):
     n_inner = int(inner_mask.sum())
     n_boundary = int(faces.nodes.shape[0] - n_inner)
     assert n_inner == 6
-    assert n_boundary == 8
+    assert n_boundary == 12     # 8 on the grid boundary + 4 exposed pieces
 
 
 def test_simple_faulted_2x2x2_j_direction_is_1(fixtures):
