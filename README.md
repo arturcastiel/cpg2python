@@ -111,6 +111,17 @@ grid.component          # (Ncells,) component label per cell
 parts = grid.split()    # list[UnstructuredGrid], one per component
 ```
 
+## Examples
+
+More runnable, self-checking examples live in the
+[cpg-fault-fieldbook](https://github.com/arturcastiel/cpg-fault-fieldbook),
+which uses this library together with
+[fault-projections](https://github.com/arturcastiel/fault-projections):
+29 lessons, from reading a deck to sliding faults in Z by editing ZCORN
+and re-processing the grid (lessons 19–29, with figures). Re-processing a
+slid deck relies on `build_topology` pairing cells across a fault by depth
+overlap (0.3.0).
+
 ## API
 
 | Function / class | Purpose |
