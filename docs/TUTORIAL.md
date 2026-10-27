@@ -57,7 +57,7 @@ print(grid.cart_dims, grid.n_cells)               # e.g. (5, 5, 3)  70
 | Attribute | Shape | Meaning |
 |-----------|-------|---------|
 | `nodes` | `(Nnodes, 3)` | unique XYZ coordinates |
-| `faces.nodes` | `(Nfaces, 4)` | node ids per face (sorted) |
+| `faces.nodes` | `(Nfaces, M)` | node ids per face (sorted; `M = 4` unless a fault polygon has 5+ corners, shorter faces repeat a node) |
 | `faces.neighbours` | `(Nfaces, 2)` | adjacent cell ids; boundary → `-1` in col 1 |
 | `faces.direction` | `(Nfaces,)` | `0`=i, `1`=j, `2`=k |
 | `cell_faces` | `(Ncells, 6+E)` | face ids: slots `[i-, i+, j-, j+, k-, k+]`, then extra fault faces (`-1` = unused; `E = 0` without faults) |
@@ -94,8 +94,7 @@ faces on one side lists the extras in `cell_faces[:, 6:]`.
 
 > **Limitation.** k-direction faults still raise `NonMatchingZError`
 > (the 2-pillar sweep does not apply to the 4-pillar k-face geometry).
-> Faulted pillar stacks must be fully active, and `mesh3d.face_edges`
-> does not support faulted grids.
+> `mesh3d.face_edges` does not support faulted grids.
 
 ---
 

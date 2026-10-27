@@ -19,6 +19,36 @@ Semantic Versioning.
 - Six names listed in `__all__` were not importable from the package
   root: `depth_crossings`, `corner_folds`, `proximity_violations`,
   `elastic_stiffness`, `stiffness_from_quality`, `support_mask`.
+- **Inactive cells beside a fault.** A faulted pillar stack with
+  inactive cells no longer raises `NonMatchingZError`. As in MRST, an
+  inactive cell does not exist: where an active cell faces an inactive
+  one across the fault it gets a boundary face; inactive–inactive
+  overlaps are dropped. An active cell that touches another active cell
+  across the fault only past an inactive gap (same k-run, different k)
+  now gets that contact face (it was missed before).
+- **Pinch-outs beside a fault.** Zero-thickness cells next to a fault no
+  longer break the stack sweep; zero-area overlaps are dropped instead
+  of emitted as degenerate faces. An active zero-thickness cell kept
+  with `pinch_tol < 0` no longer makes the k-face merge fail.
+- **Fault polygons with edge-intersection corners.** When a throw
+  carries a layer boundary across the inside of a fault face, the
+  overlap polygon has corners where a cell edge crosses a cell edge on
+  the other side, and may have 5+ corners. These faces are now emitted
+  (they used to raise `NonMatchingZError`).
+
+### Changed
+- `Faces.nodes` is `(Nfaces, M)`: `M = 4` unless a fault polygon has 5+
+  corners, and shorter faces repeat their last node (as triangles
+  already did). Grids that were supported before keep `M = 4` and
+  byte-identical output.
+- Edge-intersection nodes are appended to `nodes` after the cell-corner
+  nodes; the new field `UnstructuredGrid.n_corner_nodes` gives the
+  count of corner nodes (`None` when every node is a corner).
+- `face_geometry` handles faces with 5+ distinct corners (fan
+  triangulation in the face plane); `projected_topology` ignores
+  edge-intersection nodes; `build_mesh_graph_3d` snaps only to corner
+  nodes; `mesh3d.face_edges` / `oriented_face_edges` raise `ValueError`
+  for `M > 4`.
 
 ## [0.3.0] — 2026-10-26
 
