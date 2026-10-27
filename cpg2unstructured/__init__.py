@@ -65,8 +65,11 @@ from cpg2unstructured.morph import (
     PillarTargets,
     ValidityExhausted,
     ValidityExhaustedWarning,
+    elastic_stiffness,
     laplacian_matrix,
     morph_pillars,
+    stiffness_from_quality,
+    support_mask,
 )
 from cpg2unstructured.pillars import (
     PillarLattice,
@@ -112,7 +115,18 @@ from cpg2unstructured.validity import (
     ValidityReport,
     check_validity,
     column_signed_areas,
+    corner_folds,
+    depth_crossings,
+    proximity_violations,
     separation_violations,
+)
+from cpg2unstructured.zcorn_ops import (
+    ZcornValidity,
+    apply_zcorn_displacement,
+    unwelded_faces,
+    with_zcorn,
+    zcorn_cube,
+    zcorn_validity,
 )
 
 __version__ = "0.3.0"
@@ -214,4 +228,10 @@ __all__ = [
     "GrdeclIncludeError",
     "GrdeclDuplicatePropertyWarning",
     "NonMatchingZError",
+    "zcorn_cube",
+    "with_zcorn",
+    "apply_zcorn_displacement",
+    "unwelded_faces",
+    "ZcornValidity",
+    "zcorn_validity",
 ]
