@@ -6,6 +6,20 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+- **`zcorn_ops`: ZCORN-only edits.** `zcorn_cube` / `with_zcorn` address
+  ZCORN as `(2NX, 2NY, 2NZ)` corner slots; `apply_zcorn_displacement`
+  shifts corners along their pillars (scalar, per column corner, per
+  horizon or per slot); `unwelded_faces` lists the lateral faces whose
+  corners no longer match; `zcorn_validity` flags inverted cells and
+  overlapping layers. COORD is never touched. This is the fault-agnostic
+  half of the fault slide in fault-projections.
+
+### Fixed
+- Six names listed in `__all__` were not importable from the package
+  root: `depth_crossings`, `corner_folds`, `proximity_violations`,
+  `elastic_stiffness`, `stiffness_from_quality`, `support_mask`.
+
 ## [0.3.0] — 2026-10-26
 
 Faulted grids are now topologically and geometrically correct.

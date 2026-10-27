@@ -111,6 +111,18 @@ grid.component          # (Ncells,) component label per cell
 parts = grid.split()    # list[UnstructuredGrid], one per component
 ```
 
+**Editing ZCORN (fault slides).** Moving corners along their pillars changes
+ZCORN only; `unwelded_faces` shows which lateral faces opened and
+`zcorn_validity` rejects inverted or overlapping cells:
+
+```python
+dz = np.zeros((2 * nx, 2 * ny))       # one depth shift per column corner
+dz[2 * i0:, :] = 7.0                  # columns i >= i0 slide 7 m down
+slid = apply_zcorn_displacement(g, dz)
+open_i, open_j = unwelded_faces(slid) # (NX-1, NY), (NX, NY-1) bool
+assert zcorn_validity(slid).ok
+```
+
 ## Examples
 
 More runnable, self-checking examples live in the
@@ -131,6 +143,9 @@ overlap (0.3.0).
 | `build_topology(cube) → UnstructuredGrid` | full mesh: i/j/k faces, cell-face table, NNCs, components |
 | `attach_props(grid, grdecl) → UnstructuredGrid` | attach cell properties (PORO, PERM, …) |
 | `face_geometry(...)` / `cell_geometry(...)` | centroids, areas, normals, volumes |
+| `zcorn_cube(grid)` / `with_zcorn(grid, cube)` | ZCORN as `(2NX, 2NY, 2NZ)` corner slots and back |
+| `apply_zcorn_displacement(grid, dz)` | shift corners along their pillars (per corner, horizon or slot) |
+| `unwelded_faces(grid)` / `zcorn_validity(grid)` | opened lateral faces; inverted / overlapping cells |
 | `IndexMap(cart_dims, ijk)` | bidirectional active-id ↔ `(i, j, k)` |
 | `cell_adjacency(grid, weights=...)` | adjacency list (NumPy) |
 | `cell_adjacency_csgraph(grid, ...)` | adjacency CSR (`scipy.sparse`) |
