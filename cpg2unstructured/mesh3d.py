@@ -120,8 +120,8 @@ def _quad_face_nodes(grid: UnstructuredGrid) -> np.ndarray:
     fn = grid.faces.nodes
     if fn.shape[1] != 4:
         raise ValueError(
-            f"faces.nodes has {fn.shape[1]} columns: fault faces with "
-            "edge-intersection corners are not supported here (quad faces only)"
+            f"faces.nodes has {fn.shape[1]} columns: faces with fault "
+            "edge-intersection nodes are not supported here (quad faces only)"
         )
     return fn
 
@@ -132,7 +132,7 @@ def face_edges(grid: UnstructuredGrid, edges: np.ndarray | None = None) -> np.nd
     A quad face has 6 node-pairs: its 4 sides (which ARE mesh edges) and its 2
     diagonals (which are not). We keep the 4 that appear in ``edges``. Result is
     (Nf, 4) int64, edge ids ascending per row. Raises ``ValueError`` when
-    ``grid.faces.nodes`` has more than 4 columns (fault polygons with
+    ``grid.faces.nodes`` has more than 4 columns (faces with fault
     edge-intersection nodes).
     """
     if edges is None:

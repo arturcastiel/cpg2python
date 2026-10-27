@@ -14,6 +14,10 @@ Semantic Versioning.
   corners no longer match; `zcorn_validity` flags inverted cells and
   overlapping layers. COORD is never touched. This is the fault-agnostic
   half of the fault slide in fault-projections.
+- `Faces.loops`: each face's nodes in cyclic order, padded like `nodes`,
+  with the right-hand normal pointing out of `neighbours[:, 0]`. Set by
+  `build_topology` (and kept by `split()`); `face_geometry` uses it when
+  present.
 
 ### Fixed
 - Six names listed in `__all__` were not importable from the package
@@ -35,12 +39,26 @@ Semantic Versioning.
   overlap polygon has corners where a cell edge crosses a cell edge on
   the other side, and may have 5+ corners. These faces are now emitted
   (they used to raise `NonMatchingZError`).
+- **Open cells on tilted pillars (Norne).** On real decks the faces of a
+  cell did not close (Norne: 4,347 open cells, 1,194 negative volumes).
+  Three causes: on strongly non-planar quads the diagonals were guessed
+  from sorted node ids and a bow-tie pairing could win; normals were
+  oriented with the cell's corner mean, which fails on thin, sheared
+  cells; and fault edge-intersection nodes hung on the k-faces, placed
+  by a depth parametrisation that is off the edge across the fault
+  when the face's two pillars lean differently. Faces now carry their
+  oriented cyclic order (`Faces.loops`), geometry uses it, intersection
+  nodes are inserted into the k-faces whose edges they lie on, and each
+  is placed at the true crossing of the two edges (midway between them
+  where skew pillars make them miss). Norne now closes to 1e-12; the
+  only negative volumes are its 64 cells whose trilinear volume is
+  negative in the deck already (corner pillars crossing in plan view).
 
 ### Changed
-- `Faces.nodes` is `(Nfaces, M)`: `M = 4` unless a fault polygon has 5+
-  corners, and shorter faces repeat their last node (as triangles
-  already did). Grids that were supported before keep `M = 4` and
-  byte-identical output.
+- `Faces.nodes` is `(Nfaces, M)`: `M = 4` unless a fault polygon, or a
+  k-face carrying edge-intersection nodes, has 5+ corners, and shorter
+  faces repeat their last node (as triangles already did). Grids that
+  were supported before keep `M = 4` and byte-identical output.
 - Edge-intersection nodes are appended to `nodes` after the cell-corner
   nodes; the new field `UnstructuredGrid.n_corner_nodes` gives the
   count of corner nodes (`None` when every node is a corner).

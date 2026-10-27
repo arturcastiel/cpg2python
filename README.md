@@ -156,8 +156,10 @@ overlap (0.3.0).
 
 ```python
 grid.nodes          # (Nnodes, 3) float64 — unique XYZ
-grid.faces          # Faces: nodes (N,M), neighbours (N,2), direction (N,)
-                    #   M = 4 unless a fault polygon has 5+ corners
+grid.faces          # Faces: nodes (N,M), loops (N,M), neighbours (N,2),
+                    #   direction (N,); loops = the nodes in cyclic order,
+                    #   normal out of neighbours[:,0]. M = 4 unless a fault
+                    #   polygon or a k-face has 5+ corners
 grid.n_corner_nodes # nodes[:n] are cell corners; later ones are fault
                     #   edge-intersection nodes (None = all corners)
 grid.cell_faces     # (Ncells, 6+E) int64 — [i-, i+, j-, j+, k-, k+], then extra
@@ -176,8 +178,12 @@ grid.split()        # list[UnstructuredGrid] — one per component
 ## Limitations
 
 - **k-direction faults** raise `NonMatchingZError` (i/j fault dispatch only).
-- Fault edge-intersection nodes are not inserted into the k-faces they
-  lie on (hanging nodes, as in MRST).
+- Where the two pillars of a fault face are skew (twisted), a cell edge
+  and the edge it crosses across the fault miss each other; their shared
+  intersection node is placed midway between them. Cells still close
+  exactly, but their volumes deviate slightly from the trilinear ones
+  (Norne: 99th percentile 0.09 %, worst 4.4 %, on thin cells beside
+  large throws).
 - `mesh3d.face_edges` (∂₂ chain complex) does not support faulted grids.
 - No transmissibility, well models, or property algebra.
 - EGRID coverage: root grid only — LGR sub-grids and INIT/UNRST property

@@ -7,6 +7,9 @@ areas, side areas and volumes have closed forms.
 """
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -262,13 +265,17 @@ def test_tapered_throw_intersection_nodes_exact():
     assert grid.faces.nodes.shape[1] > 4
     assert grid.cell_corners.max() < n_corner
     # Intersection nodes: on the fault plane, at a west layer boundary,
-    # used by i-faces only, and unique.
+    # and unique. Used by the fault (i-)faces and by the k-faces whose
+    # fault-side edge they lie on, whose areas they leave unchanged.
     hanging = grid.nodes[n_corner:]
     np.testing.assert_allclose(hanging[:, 0], DX)
     np.testing.assert_allclose(hanging[:, 2] / 10.0, np.round(hanging[:, 2] / 10.0), atol=1e-12)
     assert np.unique(hanging, axis=0).shape[0] == hanging.shape[0]
     uses = np.isin(grid.faces.nodes, np.arange(n_corner, grid.nodes.shape[0])).any(axis=1)
-    assert (grid.faces.direction[uses] == 0).all()
+    assert set(grid.faces.direction[uses].tolist()) == {0, 2}
+    k_uses = uses & (grid.faces.direction == 2)
+    east = fg.centroids[k_uses, 0] > DX
+    np.testing.assert_allclose(fg.areas[k_uses], np.where(east, DX * np.hypot(DY, 22.0), DX * DY))
     used = np.unique(grid.faces.nodes[grid.faces.nodes >= n_corner])
     assert used.tolist() == list(range(n_corner, grid.nodes.shape[0]))
     distinct = [np.unique(r).size for r in grid.faces.nodes]
@@ -294,6 +301,154 @@ def test_tapered_j_fault_numbering_follows_i_faults():
     on_j = grid.faces.nodes[hang & (grid.faces.direction[:, None] == 1)]
     assert on_i.size and on_j.size
     assert on_i.min() == n_corner and on_j.min() > on_i.max()
+
+
+# ── tilted pillars ─────────────────────────────────────────────────
+
+_HEX_FACES = np.array([[0, 2, 6, 4], [1, 3, 7, 5], [0, 1, 5, 4],
+                       [2, 3, 7, 6], [0, 1, 3, 2], [4, 5, 7, 6]])
+_HEX_SIGNS = np.array([-1.0, 1.0, 1.0, -1.0, -1.0, 1.0])
+
+
+def _hex_volumes(x: np.ndarray) -> np.ndarray:
+    """Exact trilinear volumes of ``(n, 8, 3)`` cell corners (i fastest):
+    the flux of a bilinear face is its vertex mean · ½ d1 × d2."""
+    p = x[:, _HEX_FACES]                                   # (n, 6, 4, 3)
+    va = 0.5 * np.cross(p[:, :, 2] - p[:, :, 0], p[:, :, 3] - p[:, :, 1])
+    return (_HEX_SIGNS * (p.mean(axis=2) * va).sum(axis=-1)).sum(axis=1) / 3.0
+
+
+def _cell_sums(grid, fg) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Per cell: Σ sign·n·A, Σ A and the divergence-theorem volume."""
+    n = grid.n_cells
+    nb = grid.faces.neighbours
+    va = fg.normals * fg.areas[:, None]
+    flux = (fg.centroids * va).sum(axis=1) / 3.0
+    closure, total, volume = np.zeros((n, 3)), np.zeros(n), np.zeros(n)
+    for side, sign in ((0, 1.0), (1, -1.0)):
+        m = nb[:, side] >= 0
+        np.add.at(closure, nb[m, side], sign * va[m])
+        np.add.at(total, nb[m, side], fg.areas[m])
+        np.add.at(volume, nb[m, side], sign * flux[m])
+    return closure, total, volume
+
+
+def _tilted(slope: float, twist: float = 0.0) -> CornerPointGrid:
+    """:func:`_tapered` with the j=1 pillar row leaning by ``slope`` in y
+    (and ``twist`` in x) while the j=0 row stays vertical, so the two
+    pillars of the fault face lean differently. Without twist they lie
+    in the plane x=DX and every face is planar."""
+    g = _grid(_tapered())
+    coord = g.coord.reshape(2, 3, 6).copy()               # [j, i, xyz xyz]
+    for col, d in ((1, slope), (0, twist)):
+        coord[1, :, col] += d * coord[1, :, 2]
+        coord[1, :, col + 3] += d * coord[1, :, 5]
+    return CornerPointGrid(cart_dims=g.cart_dims, coord=coord.reshape(-1, 6),
+                           zcorn=g.zcorn, actnum=g.actnum)
+
+
+def _shoelace(p: np.ndarray) -> float:
+    return 0.5 * float(np.dot(p[:, 0], np.roll(p[:, 1], -1)) - np.dot(p[:, 1], np.roll(p[:, 0], -1)))
+
+
+def _clip(poly: np.ndarray, clipper: np.ndarray) -> np.ndarray:
+    """Sutherland–Hodgman: convex counter-clockwise polygons in 2D."""
+    out = list(poly)
+    for a, b in zip(clipper, np.roll(clipper, -1, axis=0)):
+        def side(p, a=a, b=b):
+            return (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])
+        inp, out = out, []
+        for p, q in zip(inp, inp[1:] + inp[:1]):
+            sp, sq = side(p), side(q)
+            if sp >= 0.0:
+                out.append(p)
+            if sp * sq < 0.0:
+                out.append(p + (q - p) * sp / (sp - sq))
+    return np.array(out).reshape(-1, 2)
+
+
+def test_tilted_pillars_crossing_on_both_edges():
+    """The fault face's pillars lean differently and the throw carries
+    layer boundaries across it. Each intersection node is the true
+    crossing of the two cells' edges (a z-parametrised crossing would lie
+    off the east edge), and lies in the k-faces of both cells, so every
+    cell closes and has its exact (prism) volume."""
+    slope = 0.3
+    g = _tilted(slope)
+    grid, fg, _ = _process(g)
+    z = g.zcorn.reshape(6, 2, 4)
+
+    def section(i, k):          # (y, z) section of column i, layer k
+        top, bot = z[2 * k, :, 2 * i], z[2 * k + 1, :, 2 * i]
+        return np.array([[0.0, top[0]], [DY + slope * top[1], top[1]],
+                         [DY + slope * bot[1], bot[1]], [0.0, bot[0]]])
+
+    closure, total, volume = _cell_sums(grid, fg)
+    assert np.abs(closure).max() < 1e-12 * total.max()
+    ijk = [tuple(map(int, r)) for r in grid.original_ijk]
+    for c, (i, _, k) in enumerate(ijk):
+        assert volume[c] == pytest.approx(DX * _shoelace(section(i, k)), rel=1e-12)
+    np.testing.assert_allclose(volume, _hex_volumes(grid.nodes[grid.cell_corners]), rtol=1e-12)
+
+    expected = {}
+    for ka in range(3):
+        for kb in range(3):
+            area = _shoelace(_clip(section(0, ka), section(1, kb)))
+            if area > 1e-9:
+                expected[((0, 0, ka), (1, 0, kb))] = area
+    found = _contacts(grid, fg)
+    assert found.keys() == expected.keys()
+    for key, area in expected.items():
+        assert found[key] == pytest.approx(area, rel=1e-12)
+
+    n_corner = grid.n_corner_nodes
+    hanging = grid.nodes[n_corner:]
+    assert len(hanging) > 0
+    np.testing.assert_allclose(hanging[:, 0], DX)
+    for y, depth in hanging[:, 1:]:
+        # on a west layer boundary (flat) and on an east one (3 -> 25 m throw)
+        assert depth / 10.0 == pytest.approx(round(depth / 10.0), abs=1e-12)
+        on_east = [abs(y - u * (DY + slope * (h + 25.0)))
+                   for h in (0.0, 10.0, 20.0, 30.0)
+                   if 0.0 <= (u := (depth - h - 3.0) / 22.0) <= 1.0]
+        assert min(on_east) < 1e-9
+
+
+def test_twisted_fault_face_cells_close():
+    """Pillars of the fault face are skew: the two cells' edges miss each
+    other, and the shared node sits midway between them. The cells still
+    close to round-off and keep (nearly) their trilinear volumes."""
+    grid, fg, cg = _process(_tilted(0.3, twist=0.05))
+    closure, total, volume = _cell_sums(grid, fg)
+    assert grid.nodes.shape[0] > grid.n_corner_nodes
+    assert np.abs(closure).max() < 1e-12 * total.max()
+    np.testing.assert_allclose(cg.volumes, volume, rtol=1e-12)
+    hexv = _hex_volumes(grid.nodes[grid.cell_corners])
+    assert (volume > 0.0).all()
+    np.testing.assert_allclose(volume, hexv, rtol=1e-2)
+
+
+_NORNE = Path(os.environ.get(
+    "CPG_NORNE_GRDECL",
+    "/mnt/c/projects/opm-machine/opm-tests/norne/include/GRID/IRAP_1005.GRDECL",
+))
+
+
+@pytest.mark.skipif(not _NORNE.is_file(), reason="Norne deck not found (set CPG_NORNE_GRDECL)")
+def test_norne_cells_close():
+    """Real tilted, twisted pillars with large throws: every cell closes.
+    Volumes keep the sign of the cell's trilinear volume (the deck has 64
+    cells, in 5 columns, whose corner pillars cross in plan view) and add
+    up to the trilinear total."""
+    grid = build_topology(from_grdecl(read_grdecl(_NORNE)))
+    fg = face_geometry(grid.nodes, grid.faces, grid.cell_corners)
+    closure, total, volume = _cell_sums(grid, fg)
+    assert (np.linalg.norm(closure, axis=1) / total).max() < 1e-9
+    hexv = _hex_volumes(grid.nodes[grid.cell_corners])
+    hexv *= np.sign(hexv.sum())
+    np.testing.assert_array_equal(volume < 0.0, hexv < 0.0)
+    assert (hexv < 0.0).sum() == 64
+    assert volume.sum() == pytest.approx(hexv.sum(), rel=1e-4)
 
 
 def test_face_geometry_padded_polygon():

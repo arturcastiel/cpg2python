@@ -41,7 +41,7 @@ __all__ = [
 # Imports for the fault-face glue function (used internally).
 # The actual integration into find_*_faces happens below.
 from cpg2unstructured._fault_connections import find_connections
-from cpg2unstructured._fault_geometry import compute_face_geometry
+from cpg2unstructured._fault_geometry import compute_face_geometry, segment_crossing
 
 # Local-corner ordering — matches an earlier `_LOCAL_CORNERS`.
 _LOCAL_CORNERS = (
@@ -78,21 +78,29 @@ class Faces:
         (Nfaces, M) int64 — sorted node ids per face (sort axis 1). A
         face is the SET of its distinct ids: one with fewer than M
         corners repeats ids, which carry no meaning (a triangular fault
-        face repeats one id, ADR-104). ``M = 4`` unless a fault polygon
-        has more corners (edge-intersection nodes,
-        :func:`_fault_stack_faces`), so grids without such polygons keep
-        ``(Nfaces, 4)``. The sorted row does not give the polygon's
-        cyclic order; geometry recovers it
-        (:func:`cpg2unstructured.geometry.face_geometry`).
+        face repeats one id, ADR-104). ``M = 4`` unless a face has more
+        corners: a fault polygon with edge-intersection nodes
+        (:func:`_fault_stack_faces`), or a k-face with such a node on
+        one of its edges. Grids without them keep ``(Nfaces, 4)``.
     neighbours
         (Nfaces, 2) int64 — adjacent cell ids. Inner faces: smaller id
         in column 0. Boundary faces: -1 in column 1.
     direction
         (Nfaces,) int8 — 0 = i-face, 1 = j-face, 2 = k-face.
+    loops
+        (Nfaces, M) int64 or ``None`` — the same node ids in cyclic
+        order around the face, padded by repeating the last one, and
+        oriented: the right-hand normal points out of
+        ``neighbours[:, 0]`` (into ``neighbours[:, 1]``). Set by
+        :func:`build_topology`; ``None`` from the per-direction face
+        finders, in which case geometry falls back to recovering the
+        order and orientation from the sorted ``nodes``
+        (:func:`cpg2unstructured.geometry.face_geometry`).
     """
     nodes: np.ndarray
     neighbours: np.ndarray
     direction: np.ndarray
+    loops: np.ndarray | None = None
 
 
 # ── shared helpers ──────────────────────────────────────────────────────────
@@ -423,6 +431,107 @@ def _pad_rows(rows: np.ndarray, m: int) -> np.ndarray:
     return np.concatenate([rows, extra], axis=1)
 
 
+def _reverse_loops(loops: np.ndarray) -> np.ndarray:
+    """Reverse padded cyclic rows, keeping the padding at the end."""
+    n, m = loops.shape
+    if n == 0:
+        return loops.copy()
+    tail = (loops == loops[:, -1:])[:, ::-1]
+    n_tail = np.where(tail.all(axis=1), m, np.argmin(tail, axis=1))
+    n_valid = (m - n_tail + 1)[:, None]
+    ar = np.arange(m)[None, :]
+    return np.take_along_axis(loops, np.where(ar < n_valid, n_valid - 1 - ar, 0), axis=1)
+
+
+def _insert_hanging_nodes(
+    loops: np.ndarray, hanging: np.ndarray, table: np.ndarray,
+) -> np.ndarray:
+    """Insert edge-intersection nodes into the face loops they lie on.
+
+    ``loops`` ``(n, 4)`` cyclic node ids; ``hanging`` ``(h, 3)`` rows
+    ``[node, edge end, edge end]``; ``table`` node coordinates. A node
+    goes into every loop that has its edge as a side, between the
+    edge's ends, ordered along the edge. Returns ``(n, M)`` loops padded
+    by repeating the last node; ``M = 4`` when nothing is inserted.
+    """
+    if hanging.shape[0] == 0:
+        return loops
+    n_tab = table.shape[0]
+    hk = np.minimum(hanging[:, 1], hanging[:, 2]) * n_tab + np.maximum(
+        hanging[:, 1], hanging[:, 2])
+    pairs = np.unique(np.stack([hk, hanging[:, 0]], axis=1), axis=0)
+    hk, hn = pairs[:, 0], pairs[:, 1]
+
+    nxt = np.roll(loops, -1, axis=1)
+    ek = np.minimum(loops, nxt) * n_tab + np.maximum(loops, nxt)
+    lo = np.searchsorted(hk, ek, side="left")
+    hi = np.searchsorted(hk, ek, side="right")
+    rows = np.nonzero((hi > lo).any(axis=1))[0]
+    if rows.size == 0:
+        return loops
+
+    grown: list[list[int]] = []
+    for r in rows:
+        seq: list[int] = []
+        for e in range(4):
+            a, b = int(loops[r, e]), int(nxt[r, e])
+            seq.append(a)
+            if hi[r, e] > lo[r, e]:
+                hs = hn[lo[r, e]:hi[r, e]]
+                t = (table[hs] - table[a]) @ (table[b] - table[a])
+                seq.extend(int(x) for x in hs[np.argsort(t, kind="stable")])
+        grown.append(seq)
+    m = max(4, max(len(seq) for seq in grown))
+    out = _pad_rows(loops, m).copy()
+    for r, seq in zip(rows, grown):
+        out[r, :len(seq)] = seq
+        out[r, len(seq):] = seq[-1]
+    return out
+
+
+def _grid_handedness(nodes: np.ndarray, corners: np.ndarray) -> int:
+    """``+1`` if the cells' (i, j, k) axes are right-handed in xyz
+    (volume-weighted majority), else ``-1``; ``+1`` for no cells.
+    ``corners`` is ``(n, 8)`` in :data:`_LOCAL_CORNERS` order."""
+    if corners.shape[0] == 0:
+        return 1
+    x = nodes[corners]                                   # (n, 8, 3)
+    e_i = x[:, [1, 3, 5, 7]].mean(axis=1) - x[:, [0, 2, 4, 6]].mean(axis=1)
+    e_j = x[:, [2, 3, 6, 7]].mean(axis=1) - x[:, [0, 1, 4, 5]].mean(axis=1)
+    e_k = x[:, 4:].mean(axis=1) - x[:, :4].mean(axis=1)
+    det = (e_i * np.cross(e_j, e_k)).sum(axis=1)
+    return -1 if det.sum() < 0 else 1
+
+
+def _oriented_face_loops(
+    raw_loops: np.ndarray, raw_face: np.ndarray, nb0: np.ndarray,
+    old_to_new: np.ndarray, raw_low: np.ndarray, raw_high: np.ndarray,
+) -> np.ndarray:
+    """One loop per kept face, oriented out of its ``nb0`` cell.
+
+    ``raw_loops`` point from ``raw_low`` to ``raw_high`` (original ids,
+    ``-1`` for none) per raw row; ``raw_face`` is each row's kept-face id
+    (``-1`` if dropped); ``nb0`` the new id of each face's first cell.
+    """
+    def _new(x: np.ndarray) -> np.ndarray:
+        return np.where(x >= 0, old_to_new[np.maximum(x, 0)], -1)
+
+    valid = raw_face >= 0
+    first = np.full(raw_face.shape, -2, dtype=np.int64)
+    first[valid] = nb0[raw_face[valid]]
+    is_low = valid & (_new(raw_low) == first)
+    is_high = valid & (_new(raw_high) == first)
+    cand = np.nonzero(is_low | is_high)[0]
+    faces, pick = np.unique(raw_face[cand], return_index=True)
+    if faces.shape[0] != nb0.shape[0]:
+        raise RuntimeError("a kept face has no raw row on its first cell — bug")
+    rep = cand[pick]
+    loops = raw_loops[rep].copy()
+    flip = is_high[rep]
+    loops[flip] = _reverse_loops(loops[flip])
+    return loops
+
+
 @dataclass(frozen=True)
 class _StackFaces:
     """Output of :func:`_fault_stack_faces`."""
@@ -431,6 +540,7 @@ class _StackFaces:
     low_orig: np.ndarray        # (n,) A-side original cell id or -1
     high_orig: np.ndarray       # (n,) B-side original cell id or -1
     new_points: np.ndarray      # (n_new, 3) intersection nodes, ids n_base + k
+    hanging: np.ndarray         # (n_new, 4) global ids: A-edge, B-edge of each
 
 
 def _fault_stack_faces(
@@ -467,22 +577,31 @@ def _fault_stack_faces(
     ``n_base, n_base + 1, ...`` (default ``n_base = len(cube.nodes)``)
     in stack order, then in the order :func:`compute_face_geometry`
     creates them; a crossing shared by neighbouring polygons is one
-    node, and only nodes used by a returned face are kept. They lie on
-    cell top/base edges but are not corners of the k-faces there
-    (hanging nodes, as in MRST).
+    node, and only nodes used by a returned face are kept. Each is
+    placed on both edges that cross there (:func:`segment_crossing`,
+    exact for a planar face whatever the pillar tilt; MRST's
+    z-parametrised point lies on the A edge only, so with pillars that
+    lean differently it would sit off the B edge). The two edges are
+    returned in ``hanging``; :func:`build_topology` inserts the node
+    into the k-faces bounded by those edges, so every cell stays
+    closed.
 
     Returns
     -------
     _StackFaces
         ``polys`` is ``(n, M)``, ``M = max(4, corners per polygon)``,
-        node ids in :func:`compute_face_geometry` order (clockwise,
-        normal from the A side to the B side), padded by repeating the
+        node ids in :func:`compute_face_geometry` order — pillar 1 to
+        pillar 2 along the smaller-z edge, back along the larger-z
+        edge, so the right-hand normal is (pillar 1 → 2) × (+z): A → B
+        for i-stacks, B → A for j-stacks in a right-handed grid with
+        z increasing with k — padded by repeating the
         last corner (a triangle — e.g. at a fault tip — is
         ``[a, b, c, c]``, ADR-104). Not sorted. ``low_orig`` /
         ``high_orig`` are original F-order cell ids on the A side
         (column ``i`` / row ``j``) and on the B side (``i+1`` /
         ``j+1``), ``-1`` on the side an exposed piece faces.
-        ``new_points`` holds the intersection nodes.
+        ``new_points`` holds the intersection nodes and ``hanging``
+        their A edge then B edge, ``(n_new, 4)`` global node ids.
     """
     nodes = cube.nodes
     if n_base is None:
@@ -493,6 +612,7 @@ def _fault_stack_faces(
     empty = _StackFaces(
         stack_faulted, np.zeros((0, 4), dtype=np.int64),
         empty_ids, empty_ids.copy(), np.zeros((0, 3), dtype=np.float64),
+        np.zeros((0, 4), dtype=np.int64),
     )
     if not stack_faulted.any():
         return empty
@@ -504,6 +624,7 @@ def _fault_stack_faces(
     low_chunks: list[np.ndarray] = []
     high_chunks: list[np.ndarray] = []
     new_chunks: list[np.ndarray] = []
+    hang_chunks: list[np.ndarray] = []
     n_new = 0
 
     for i_int, j_int in zip(*np.nonzero(stack_faulted)):
@@ -518,8 +639,8 @@ def _fault_stack_faces(
         if C.shape[0] == 0:
             continue
 
-        pts, num_nodes, corners = compute_face_geometry(
-            s.pa[C[:, 0]], s.pb[C[:, 1]], s.pts,
+        pts, num_nodes, corners, edges = compute_face_geometry(
+            s.pa[C[:, 0]], s.pb[C[:, 1]], s.pts, return_edges=True,
         )
         rows, ok = _cyclic_polygons(corners, num_nodes, pts)
         rows, low, high = rows[ok], low[ok], high[ok]
@@ -540,10 +661,20 @@ def _fault_stack_faces(
         to_global[used] = n_base + n_new + np.arange(used.size)
         n_new += used.size
 
+        # Place each crossing on both of its edges (see segment_crossing);
+        # MRST's point is on the A edge only, off B when pillars tilt.
+        e_used = edges[used - (n_real + 4)]
+        if (e_used >= n_real).any():
+            raise RuntimeError(
+                f"virtual padding edge crosses a fault face edge in "
+                f"{axis}-stack (i={i}, j={j}) — bug"
+            )
+        p = pts[e_used]                                   # (n, 4, 3)
+        new_chunks.append(segment_crossing(p[:, 0], p[:, 1], p[:, 2], p[:, 3]))
         poly_chunks.append(to_global[rows])
         low_chunks.append(low)
         high_chunks.append(high)
-        new_chunks.append(pts[used])
+        hang_chunks.append(s.real_ids[e_used])
 
     if not poly_chunks:
         return empty
@@ -554,6 +685,7 @@ def _fault_stack_faces(
         np.concatenate(low_chunks).astype(np.int64),
         np.concatenate(high_chunks).astype(np.int64),
         np.concatenate(new_chunks, axis=0).astype(np.float64),
+        np.concatenate(hang_chunks, axis=0).astype(np.int64),
     )
 
 
@@ -918,8 +1050,9 @@ class UnstructuredGrid:
     array. When a fault polygon has a corner where a cell's top or base
     edge crosses a cell edge across the fault, that edge-intersection
     node is appended after them: ids ``>= n_corner_nodes`` are such
-    nodes, used only by fault faces (never by ``cell_corners``; they
-    hang on the k-faces, as in MRST). ``n_corner_nodes`` is ``None``
+    nodes, used by the fault faces and by the k-faces whose edges they
+    lie on (never by ``cell_corners``). Unlike MRST, where they hang,
+    this keeps every cell closed. ``n_corner_nodes`` is ``None``
     when every node is a corner node. ``original_ijk[c]`` is the
     Eclipse-natural ``(i, j, k)`` of the cell that used to be at new
     id ``c``.
@@ -1026,10 +1159,18 @@ class UnstructuredGrid:
                 sub_nb[m, col] = cell_remap[sub_nb[m, col]]
             sub_nb = _move_minus_one_to_col1(sub_nb)
 
+            sub_loops = self.faces.loops
+            if sub_loops is not None:
+                # Loops point out of the column-0 cell; keep that if the
+                # re-sort of the neighbours swapped a face's cells.
+                sub_loops = sub_loops[face_mask].copy()
+                swapped = sub_nb[:, 0] != cell_remap[nb[face_mask, 0]]
+                sub_loops[swapped] = _reverse_loops(sub_loops[swapped])
             sub_faces = Faces(
                 nodes=self.faces.nodes[face_mask],
                 neighbours=sub_nb,
                 direction=self.faces.direction[face_mask],
+                loops=sub_loops,
             )
             if self.nnc.size:
                 nm = cell_mask[self.nnc[:, 0]] & cell_mask[self.nnc[:, 1]]
@@ -1316,9 +1457,37 @@ def build_topology(cube: CornerCube) -> UnstructuredGrid:
     )
     k_l, k_h = _filter_neighbours(k_low_orig, k_high_orig, k_keep)
 
-    # Faces are rows of M sorted node ids, M = 4 unless a fault polygon
-    # has more corners; shorter faces repeat ids (see Faces).
-    n_cols = max(4, i_fq.shape[1], j_fq.shape[1])
+    # Cyclic loops, each oriented from its low cell to its high cell in a
+    # right-handed grid: raw quads are in [00, 10, 01, 11] tensor order;
+    # j-faces and j-stack fault polygons run the other way round.
+    k_loops = k_quads[k_keep][:, [0, 1, 3, 2]]
+    new_points = np.concatenate([i_res.new_points, j_res.new_points], axis=0)
+    if new_points.shape[0]:
+        # An edge-intersection node lies on the top/base edge of a cell on
+        # each side of the fault; put it into the k-faces bounded by those
+        # edges too, or the cells there would not close.
+        hang = np.concatenate([i_res.hanging, j_res.hanging], axis=0)
+        node_ids = n_cube + np.arange(new_points.shape[0], dtype=np.int64)
+        k_loops = _insert_hanging_nodes(
+            k_loops,
+            np.concatenate([
+                np.stack([node_ids, hang[:, 0], hang[:, 1]], axis=1),
+                np.stack([node_ids, hang[:, 2], hang[:, 3]], axis=1),
+            ]),
+            np.concatenate([cube.nodes, new_points], axis=0),
+        )
+
+    # Faces are rows of M sorted node ids, M = 4 unless a face has more
+    # corners; shorter faces repeat ids (see Faces).
+    n_cols = max(4, i_fq.shape[1], j_fq.shape[1], k_loops.shape[1])
+
+    all_loops = np.concatenate([
+        _pad_rows(i_quads[i_keep][:, [0, 1, 3, 2]], n_cols),
+        _pad_rows(i_fq, n_cols),
+        _pad_rows(j_quads[j_keep][:, [0, 2, 3, 1]], n_cols),
+        _pad_rows(_reverse_loops(j_fq), n_cols),
+        _pad_rows(k_loops, n_cols),
+    ]).astype(np.int64, copy=False)
 
     def _rows(raw: np.ndarray, fault: np.ndarray) -> np.ndarray:
         return np.concatenate([
@@ -1328,7 +1497,7 @@ def build_topology(cube: CornerCube) -> UnstructuredGrid:
 
     i_q = _rows(i_quads[i_keep], i_fq)
     j_q = _rows(j_quads[j_keep], j_fq)
-    k_q = _pad_rows(np.sort(k_quads[k_keep], axis=-1), n_cols)
+    k_q = _pad_rows(np.sort(k_loops, axis=-1), n_cols)
 
     all_quads = np.concatenate([i_q, j_q, k_q], axis=0)
     all_low   = np.concatenate([i_l, j_l, k_l])
@@ -1399,9 +1568,18 @@ def build_topology(cube: CornerCube) -> UnstructuredGrid:
     face_old_to_new = np.full(n_uniq, -1, dtype=np.int64)
     face_old_to_new[face_keep] = np.arange(n_kept_faces)
 
+    # Oriented loop per kept face: take a raw row that has the face's
+    # neighbours[:, 0] cell on one side; its loop points low -> high, so
+    # reverse it when that cell is the row's high side.
+    face_loops = _oriented_face_loops(
+        all_loops, face_old_to_new[np.asarray(inverse).ravel()], nb_final[:, 0],
+        old_to_new, all_low, all_high,
+    )
+    if _grid_handedness(cube.nodes, cell_corners[keep_cells]) < 0:
+        face_loops = _reverse_loops(face_loops)
+
     # Edge-intersection nodes: keep those a kept face uses, in order.
     face_nodes = uniq[face_keep]
-    new_points = np.concatenate([i_res.new_points, j_res.new_points], axis=0)
     nodes_out = cube.nodes
     if new_points.shape[0]:
         used = np.zeros(new_points.shape[0], dtype=bool)
@@ -1409,12 +1587,14 @@ def build_topology(cube: CornerCube) -> UnstructuredGrid:
         node_map = np.arange(n_cube + new_points.shape[0], dtype=np.int64)
         node_map[n_cube:][used] = n_cube + np.arange(int(used.sum()))
         face_nodes = node_map[face_nodes]        # monotone: rows stay sorted
+        face_loops = node_map[face_loops]
         nodes_out = np.concatenate([cube.nodes, new_points[used]], axis=0)
 
     final_faces = Faces(
         nodes=face_nodes,
         neighbours=nb_final,
         direction=merged_dir[face_keep],
+        loops=face_loops,
     )
 
     # Cell-faces inversion. Walk raw faces; assign each to the right
