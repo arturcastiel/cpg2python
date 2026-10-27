@@ -4,17 +4,14 @@ First PR that wires together  (find_connections) +
 (compute_face_geometry) + an earlier faulted mask helper into a real
 fault-face producer.
 
-Restrictions tested (per  spec):
-  - all-active stacks only
-  - 4-corner fault polygons only
+Inactive cells in a fault stack are left out, as in MRST: an active
+cell's overlap with one becomes a boundary face.
 """
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from cpg2unstructured import from_grdecl, read_grdecl
-from cpg2unstructured._errors import NonMatchingZError
 from cpg2unstructured.unstructured import (
     _find_faulted_i_faces,
 )
@@ -115,14 +112,14 @@ def test_simple_faulted_2x2x2_face_normal_a_to_b_via_neighbours(fixtures):
             assert nb[0] <= nb[1], f"col 0 should be <= col 1 for inner: {nb}"
 
 
-# ──  restriction enforcement: inactive cells in fault stack ────
+# ── inactive cells in a fault stack (MRST: they do not exist) ──────
 
 
-def test_inactive_cell_in_fault_stack_raises(tmp_path, fixtures):
-    """Take the simple_faulted_2x2x2 deck and deactivate cell (0,0,0)
-    — should raise NonMatchingZError with the v2-only hint."""
+def test_inactive_cell_in_fault_stack_becomes_boundary(tmp_path, fixtures):
+    """Deactivate cell (0,0,0) of simple_faulted_2x2x2. Its overlap with
+    B cell (1,0,0) becomes a boundary face of that cell, its overlap with
+    the virtual cell above B is dropped, and no face references it."""
     src = (fixtures / "simple_faulted_2x2x2.grdecl").read_text()
-    # Replace "8*1 /" with explicit ACTNUM and deactivate cell (0,0,0).
     # Cell F-order index for (0,0,0) = 0. So first ACTNUM value flips to 0.
     src = src.replace(
         "ACTNUM\n  8*1 /",
@@ -130,11 +127,17 @@ def test_inactive_cell_in_fault_stack_raises(tmp_path, fixtures):
     )
     p = tmp_path / "faulted_with_inactive.grdecl"
     p.write_text(src)
-    g = read_grdecl(p)
-    cube = from_grdecl(g)
-    with pytest.raises(NonMatchingZError,
-                       match="inactive cells in faulted i-stack"):
-        _find_faulted_i_faces(cube)
+    cube = from_grdecl(read_grdecl(p))
+    faces, table = _find_faulted_i_faces(cube)
+    assert table.shape == cube.nodes.shape
+    # Active ids: (1,0,0)=0 (0,1,0)=1 (1,1,0)=2 (0,0,1)=3 (1,0,1)=4
+    # (0,1,1)=5 (1,1,1)=6. j=0 stack: 0 exposed where (0,0,0) was, 0-3,
+    # 3-4, 4 exposed below; j=1 stack: the all-active pattern.
+    pairs = sorted(map(tuple, faces.neighbours.tolist()))
+    assert pairs == sorted([
+        (0, -1), (0, 3), (3, 4), (4, -1),
+        (1, -1), (1, 2), (2, 5), (5, 6), (6, -1),
+    ])
 
 
 # ── build_topology still raises ─
