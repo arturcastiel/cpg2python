@@ -7,6 +7,8 @@ Pure geometric primitives:
 
 - :func:`line_intersection` — XYZ intersection of two
   line-segment families, z-parametrised.
+- :func:`segment_crossing` — the same crossings placed on both
+  segments (exact for segments in one plane, any pillar tilt).
 - :func:`compute_face_geometry` — full 8-position J-table
   polygon assembler for fault faces, including the 4 diamond cases.
 
@@ -17,7 +19,7 @@ from __future__ import annotations
 
 import numpy as np
 
-__all__ = ["line_intersection", "compute_face_geometry"]
+__all__ = ["line_intersection", "segment_crossing", "compute_face_geometry"]
 
 # Sentinel value used in the J-table to mark "this position is empty".
 # Real node IDs are non-negative int64; we use -1 as the NaN-equivalent.
@@ -107,11 +109,56 @@ def line_intersection(la_start: np.ndarray,
     return out
 
 
+def segment_crossing(la_start: np.ndarray,
+                     la_end: np.ndarray,
+                     lb_start: np.ndarray,
+                     lb_end: np.ndarray) -> np.ndarray:
+    """Crossing point of segment pairs known to cross between their pillars.
+
+    :func:`line_intersection` (MRST) finds the crossing parameter from z
+    alone and places the point on line A. That point is on line B too
+    only when the two pillars are parallel (e.g. vertical). When they
+    lean differently it lies off line B, even where both segments are
+    in one plane and do intersect.
+
+    This function returns the midpoint of the closest points of the two
+    lines. For segments in one plane (a planar fault face), that is
+    their exact intersection. For skew segments (non-coplanar pillars),
+    it is the point nearest to both. Pairs whose lines are almost
+    parallel, where that point is ill-conditioned, keep the
+    :func:`line_intersection` point. Shapes as in
+    :func:`line_intersection`.
+    """
+    a1 = np.asarray(la_start, dtype=np.float64)
+    a2 = np.asarray(la_end, dtype=np.float64)
+    b1 = np.asarray(lb_start, dtype=np.float64)
+    b2 = np.asarray(lb_end, dtype=np.float64)
+    u = a2 - a1
+    v = b2 - b1
+    w = a1 - b1
+    uu = (u * u).sum(axis=-1)
+    uv = (u * v).sum(axis=-1)
+    vv = (v * v).sum(axis=-1)
+    uw = (u * w).sum(axis=-1)
+    vw = (v * w).sum(axis=-1)
+    den = uu * vv - uv * uv                     # |u|^2 |v|^2 sin^2(angle)
+    ok = den > 1e-10 * uu * vv
+    safe = np.where(ok, den, 1.0)
+    s = np.clip((uv * vw - vv * uw) / safe, 0.0, 1.0)
+    r = np.clip((uu * vw - uv * uw) / safe, 0.0, 1.0)
+    out = 0.5 * ((a1 + s[..., None] * u) + (b1 + r[..., None] * v))
+    if not np.all(ok):
+        bad = ~ok
+        out[bad] = line_intersection(a1[bad], a2[bad], b1[bad], b2[bad])
+    return out
+
+
 def compute_face_geometry(
     pa: np.ndarray,
     pb: np.ndarray,
     points: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    return_edges: bool = False,
+) -> tuple[np.ndarray, ...]:
     """Build the 3D polygons of fault faces from corner-id arrays.
 
     For each connection (row), constructs a clockwise polygon whose
@@ -145,6 +192,8 @@ def compute_face_geometry(
         Same for B-face corners.
     points : (n_points, 3) float64
         Global node coordinate table.
+    return_edges : bool
+        Also return the two edges whose crossing made each new node.
 
     Returns
     -------
@@ -157,6 +206,10 @@ def compute_face_geometry(
         Flat list of node IDs in clockwise order, concatenated
         across all faces. Reconstruct per-face slices with
         ``cumsum(num_nodes)``.
+    crossing_edges : (n_new, 4) int64
+        Only with ``return_edges=True``: per new node (in ``new_points``
+        order), the A-edge ``[pillar 1, pillar 2]`` node ids followed by
+        the B-edge ``[pillar 1, pillar 2]`` node ids that cross there.
 
     Notes
     -----
@@ -183,12 +236,14 @@ def compute_face_geometry(
     pb = np.asarray(pb, dtype=np.int64)
     points = np.asarray(points, dtype=np.float64)
     n = pa.shape[0]
+    no_edges = np.zeros((0, 4), dtype=np.int64)
     if n == 0:
-        return (
+        empty = (
             points,
             np.zeros(0, dtype=np.int64),
             np.zeros(0, dtype=np.int64),
         )
+        return (*empty, no_edges) if return_edges else empty
 
     z = points[:, 2]
     az = z[pa]                                  # (n, 4)
@@ -245,6 +300,7 @@ def compute_face_geometry(
 
     # ── Step 3: compute the surviving intersections ─────────────────
     f = np.full((n, 4), _EMPTY, dtype=np.int64)  # (n, 4) per-row, per-type
+    crossing_edges = no_edges
     if cross.any():
         la_start = points[PP[cross, 0]]
         la_end   = points[PP[cross, 1]]
@@ -260,6 +316,11 @@ def compute_face_geometry(
         new_ids_per_crossing = points.shape[0] + np.asarray(inverse,
                                                             dtype=np.int64)
         points = np.concatenate([points, Q_unique], axis=0)
+        if return_edges:
+            _, first = np.unique(np.asarray(inverse).ravel(), return_index=True)
+            crossing_edges = np.concatenate(
+                [PP[cross][first], QQ[cross][first]], axis=1,
+            ).astype(np.int64)
 
         # Slot the new IDs into f at (row, type) positions where cross
         # was True. PP/QQ were stacked type-major: type k spans rows
@@ -328,4 +389,6 @@ def compute_face_geometry(
         if corners_chunks
         else np.zeros(0, dtype=np.int64)
     )
+    if return_edges:
+        return points, num_nodes, corners, crossing_edges
     return points, num_nodes, corners

@@ -64,7 +64,7 @@ class Mesh3DGraph:
     edges: np.ndarray          # (E, 2) int64
     edge_len: np.ndarray       # (E,) float64
     csr: sp.csr_array          # (Nn, Nn) symmetric, weight = edge length
-    kdtree: cKDTree            # over nodes (3D)
+    kdtree: cKDTree            # over the corner nodes (3D), see build_mesh_graph_3d
 
     @property
     def n_nodes(self) -> int:
@@ -115,16 +115,29 @@ def _lookup_edge_ids(
     return ids, found
 
 
+def _quad_face_nodes(grid: UnstructuredGrid) -> np.ndarray:
+    """``grid.faces.nodes``, refusing faces with more than 4 corners."""
+    fn = grid.faces.nodes
+    if fn.shape[1] != 4:
+        raise ValueError(
+            f"faces.nodes has {fn.shape[1]} columns: faces with fault "
+            "edge-intersection nodes are not supported here (quad faces only)"
+        )
+    return fn
+
+
 def face_edges(grid: UnstructuredGrid, edges: np.ndarray | None = None) -> np.ndarray:
     """Each face's 4 boundary edges as ids into the unique-edge list (∂₂).
 
     A quad face has 6 node-pairs: its 4 sides (which ARE mesh edges) and its 2
     diagonals (which are not). We keep the 4 that appear in ``edges``. Result is
-    (Nf, 4) int64, edge ids ascending per row.
+    (Nf, 4) int64, edge ids ascending per row. Raises ``ValueError`` when
+    ``grid.faces.nodes`` has more than 4 columns (faces with fault
+    edge-intersection nodes).
     """
     if edges is None:
         edges = mesh_edges(grid)
-    fn = grid.faces.nodes
+    fn = _quad_face_nodes(grid)
     nn = grid.nodes.shape[0]
 
     a = np.stack([fn[:, i] for i, _ in _FACE_COMBOS], axis=1).astype(np.int64)
@@ -156,11 +169,12 @@ def oriented_face_edges(
     follow the boundary cycle so the signs are meaningful. The per-face cycle
     direction is intrinsic (derived from the node-id ordering); making it
     globally coherent across a surface is orientation propagation, done by the
-    caller — see the assembly step that unions per-patch fills.
+    caller — see the assembly step that unions per-patch fills. Raises
+    ``ValueError`` like :func:`face_edges` for faces with more than 4 corners.
     """
     if edges is None:
         edges = mesh_edges(grid)
-    fn = grid.faces.nodes
+    fn = _quad_face_nodes(grid)
     nn = grid.nodes.shape[0]
 
     # Which of the 6 node-pairs are real edges → locate corner 0's diagonal.
@@ -210,9 +224,15 @@ def cell_centroids(grid: UnstructuredGrid) -> np.ndarray:
 
 
 def build_mesh_graph_3d(grid: UnstructuredGrid) -> Mesh3DGraph:
-    """Build the 3D node-edge graph + KD-tree from a grid."""
+    """Build the 3D node-edge graph + KD-tree from a grid.
+
+    Fault edge-intersection nodes (ids ``>= grid.n_corner_nodes``) are on
+    no mesh edge; the KD-tree leaves them out so ``nearest_node`` never
+    returns one.
+    """
     edges = mesh_edges(grid)
     nodes = grid.nodes
+    n_corner = nodes.shape[0] if grid.n_corner_nodes is None else grid.n_corner_nodes
     elen = np.linalg.norm(nodes[edges[:, 0]] - nodes[edges[:, 1]], axis=1)
     n = nodes.shape[0]
     rows = np.concatenate([edges[:, 0], edges[:, 1]])
@@ -222,5 +242,5 @@ def build_mesh_graph_3d(grid: UnstructuredGrid) -> Mesh3DGraph:
     return Mesh3DGraph(
         nodes=nodes, edges=edges,
         edge_len=elen.astype(np.float64, copy=False),
-        csr=csr, kdtree=cKDTree(nodes),
+        csr=csr, kdtree=cKDTree(nodes[:n_corner]),
     )
