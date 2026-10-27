@@ -56,15 +56,53 @@ def face_geometry(
     `cell_corners` (mesh.cell_corners from `_TopoMesh`) provides a
     cell-centroid estimate (mean of the 8 corner node positions) used
     ONLY for the orientation flip. See .
+
+    ``faces.nodes`` may have ``M > 4`` columns (fault polygons with
+    edge-intersection corners, see :class:`Faces`). A face with 5 or
+    more distinct corners is put in cyclic order around its best-fit
+    plane and fan-triangulated: exact area and area-weighted centroid
+    for a planar convex polygon. Faces with at most 4 distinct corners
+    get the same treatment as in a 4-column ``faces.nodes``.
     """
-    v = nodes[faces.nodes]                              # (Nfaces, 4, 3)
+    fn = faces.nodes
+    if fn.shape[1] == 4:
+        centroids, areas, cross_d = _quad_geometry(nodes, fn)
+    else:
+        centroids, areas, cross_d = _padded_face_geometry(nodes, fn)
+
+    norm_len = 2.0 * areas
+    safe_len = np.where(norm_len < 1e-15, 1.0, norm_len)   #  guard
+    normals = cross_d / safe_len[:, None]
+    # Degenerate faces (norm_len < 1e-15) get a zero normal vector.
+    normals = np.where(norm_len[:, None] < 1e-15, 0.0, normals)
+
+    # Orient normals per  using cell-corners mean as centroid estimate.
+    cell_centroid_est = nodes[cell_corners].mean(axis=1)   # (Ncells, 3)
+    cell0_ids = faces.neighbours[:, 0]
+    # Every face has at least one active cell on col 0 ( invariant:
+    # boundary faces have -1 in col 1, never col 0 — _move_minus_one_to_col1).
+    cell0_centroid = cell_centroid_est[cell0_ids]          # (Nfaces, 3)
+    away_dir = centroids - cell0_centroid
+    dots = (away_dir * normals).sum(axis=1)
+    flip = dots < 0
+    if flip.any():
+        normals = normals.copy()
+        normals[flip] = -normals[flip]
+
+    return FaceGeometry(centroids=centroids, areas=areas, normals=normals)
+
+
+def _quad_geometry(
+    nodes: np.ndarray, fn: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """``(centroids, areas, area vectors x2)`` of ``(n, 4)`` sorted faces."""
+    v = nodes[fn]                                       # (Nfaces, 4, 3)
     centroids = v.mean(axis=1)
     N = v.shape[0]
 
     # A triangular fault face is stored with one node repeated; its
     # centroid is the mean of its 3 distinct corners. Sorted ids make
     # repeats adjacent.
-    fn = faces.nodes
     distinct = np.ones(fn.shape, dtype=bool)
     distinct[:, 1:] = fn[:, 1:] != fn[:, :-1]
     tri = ~distinct.all(axis=1)
@@ -89,27 +127,66 @@ def face_geometry(
     best = lens.argmax(axis=1)
     row = np.arange(N)
     cross_d = crosses[row, best]                        # (N, 3)
-    norm_len = lens[row, best]
-    areas = 0.5 * norm_len
-    safe_len = np.where(norm_len < 1e-15, 1.0, norm_len)   #  guard
-    normals = cross_d / safe_len[:, None]
-    # Degenerate faces (norm_len < 1e-15) get a zero normal vector.
-    normals = np.where(norm_len[:, None] < 1e-15, 0.0, normals)
+    areas = 0.5 * lens[row, best]
+    return centroids, areas, cross_d
 
-    # Orient normals per  using cell-corners mean as centroid estimate.
-    cell_centroid_est = nodes[cell_corners].mean(axis=1)   # (Ncells, 3)
-    cell0_ids = faces.neighbours[:, 0]
-    # Every face has at least one active cell on col 0 ( invariant:
-    # boundary faces have -1 in col 1, never col 0 — _move_minus_one_to_col1).
-    cell0_centroid = cell_centroid_est[cell0_ids]          # (Nfaces, 3)
-    away_dir = centroids - cell0_centroid
-    dots = (away_dir * normals).sum(axis=1)
-    flip = dots < 0
-    if flip.any():
-        normals = normals.copy()
-        normals[flip] = -normals[flip]
 
-    return FaceGeometry(centroids=centroids, areas=areas, normals=normals)
+def _padded_face_geometry(
+    nodes: np.ndarray, fn: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """:func:`_quad_geometry` for ``(n, M > 4)`` sorted, padded faces."""
+    n, m = fn.shape
+    distinct = np.ones(fn.shape, dtype=bool)
+    distinct[:, 1:] = fn[:, 1:] != fn[:, :-1]
+    count = distinct.sum(axis=1)
+    # Distinct ids first, in sorted order, padded with the largest id.
+    rank = np.cumsum(distinct, axis=1) - 1
+    compact = np.repeat(fn[:, -1:], m, axis=1)
+    compact[np.repeat(np.arange(n), m), rank.ravel()] = fn.ravel()
+
+    centroids = np.zeros((n, 3), dtype=np.float64)
+    areas = np.zeros(n, dtype=np.float64)
+    cross_d = np.zeros((n, 3), dtype=np.float64)
+    small = count <= 4
+    if small.any():
+        centroids[small], areas[small], cross_d[small] = _quad_geometry(
+            nodes, compact[small, :4],
+        )
+    for k in np.unique(count[~small]):
+        sel = count == k
+        centroids[sel], areas[sel], cross_d[sel] = _polygon_geometry(
+            nodes[compact[sel, :k]],
+        )
+    return centroids, areas, cross_d
+
+
+def _polygon_geometry(
+    v: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Centroid, area and area vector x2 of ``(n, k, 3)`` polygon corners
+    given in any order: sorted by angle around the vertex mean in the
+    best-fit plane, then fan-triangulated."""
+    mean = v.mean(axis=1, keepdims=True)
+    d = v - mean
+    _, _, vt = np.linalg.svd(d)                         # rows: plane axes
+    ang = np.arctan2(
+        (d * vt[:, None, 1]).sum(axis=-1), (d * vt[:, None, 0]).sum(axis=-1),
+    )
+    order = np.argsort(ang, axis=1)
+    p = np.take_along_axis(v, order[..., None], axis=1)
+    tri = np.cross(p[:, 1:-1] - p[:, :1], p[:, 2:] - p[:, :1])   # (n, k-2, 3)
+    cross_d = tri.sum(axis=1)
+    norm_len = np.linalg.norm(cross_d, axis=1)
+    unit = cross_d / np.where(norm_len < 1e-15, 1.0, norm_len)[:, None]
+    w = (tri * unit[:, None]).sum(axis=-1)              # 2x triangle areas
+    tri_c = (p[:, :1] + p[:, 1:-1] + p[:, 2:]) / 3.0
+    w_sum = w.sum(axis=1)
+    flat = w_sum <= 0.0                                 # degenerate polygon
+    weighted = (tri_c * w[..., None]).sum(axis=1)
+    centroids = np.where(
+        flat[:, None], mean[:, 0], weighted / np.where(flat, 1.0, w_sum)[:, None],
+    )
+    return centroids, 0.5 * norm_len, cross_d
 
 
 def cell_geometry(

@@ -68,7 +68,8 @@ class ProjectedTopology:
         (cells differ in I), 1 = 'Y' face (cells differ in J).
     node_of_grid_node
         (Nnodes,) int64 — maps each 3D ``grid.nodes`` id to its projected
-        node id in ``nodes2d``.
+        node id in ``nodes2d``; ``-1`` for fault edge-intersection nodes
+        (ids ``>= grid.n_corner_nodes``), which are not projected.
     """
 
     plane: str
@@ -100,6 +101,13 @@ def projected_topology(
         before deduplicating nodes — useful when vertically-aligned pillars
         carry tiny floating-point drift. ``None`` (default) deduplicates on
         exact coordinates.
+    pillar_of_node
+        Pillar id per node (:func:`cpg2unstructured.cpg.pillar_of_node`),
+        for the corner nodes or for all ``grid.nodes``.
+
+    Fault edge-intersection nodes lie between two pillars, so they are
+    left out: a fault face's edge joins its outermost corner nodes, and a
+    face with fewer than two projected corners has no edge.
 
     Returns
     -------
@@ -113,17 +121,20 @@ def projected_topology(
         ) from None
 
     # 1. Projected nodes — collapse the 3D nodes of each column into one.
-    coords2d = grid.nodes[:, (u_ax, v_ax)]
+    n_nodes = grid.nodes.shape[0]
+    n_corner = n_nodes if grid.n_corner_nodes is None else grid.n_corner_nodes
+    coords2d = grid.nodes[:n_corner, (u_ax, v_ax)]
     if pillar_of_node is not None:
         # IDENTITY collapse: nodes sharing a pillar are one projected node,
         # whatever their coordinates. Correct for tilted pillars, where the
         # coordinate collapse below silently stops collapsing anything.
         pon = np.asarray(pillar_of_node, dtype=np.int64).ravel()
-        if pon.shape[0] != grid.nodes.shape[0]:
+        if pon.shape[0] not in (n_corner, n_nodes):
             raise ValueError(
                 f"pillar_of_node must have one entry per node "
-                f"({grid.nodes.shape[0]}); got {pon.shape[0]}"
+                f"({n_nodes}, or {n_corner} corner nodes); got {pon.shape[0]}"
             )
+        pon = pon[:n_corner]
         uniq, inverse = np.unique(pon, return_inverse=True)
         node_of_grid_node = inverse.astype(np.int64, copy=False).ravel()
         # representative position: the mean of the column's nodes
@@ -141,6 +152,9 @@ def projected_topology(
         collapsed = np.unique(key, axis=0, return_inverse=True)
         nodes2d = np.asarray(collapsed[0], dtype=np.float64)
         node_of_grid_node = np.asarray(collapsed[1]).astype(np.int64, copy=False).ravel()
+    if n_corner < n_nodes:
+        node_of_grid_node = np.concatenate(
+            [node_of_grid_node, np.full(n_nodes - n_corner, -1, dtype=np.int64)])
 
     # 2. Select the lateral faces that lie in-plane (normal to a kept axis).
     fdir = grid.faces.direction
@@ -151,10 +165,17 @@ def projected_topology(
 
     # 3. Each face's 4 corners collapse to exactly 2 projected nodes.
     pv = node_of_grid_node[fnodes]
-    pv_sorted = np.sort(pv, axis=1)
-    a = pv_sorted[:, 0]
-    b = pv_sorted[:, -1]
-    nondegenerate = a != b
+    if n_corner == n_nodes:
+        pv_sorted = np.sort(pv, axis=1)
+        a = pv_sorted[:, 0]
+        b = pv_sorted[:, -1]
+        nondegenerate = a != b
+    else:
+        # Skip intersection nodes (-1); a face may have none of its own.
+        has = pv >= 0
+        a = np.where(has, pv, np.iinfo(np.int64).max).min(axis=1)
+        b = np.where(has, pv, -1).max(axis=1)
+        nondegenerate = has.any(axis=1) & (a != b)
     a, b = a[nondegenerate], b[nondegenerate]
     fnb = fnb[nondegenerate]
     fsel_dir = fsel_dir[nondegenerate]
