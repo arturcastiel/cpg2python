@@ -6,6 +6,12 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-10-28
+
+ZCORN-only edits for sliding faults, and fault faces in general position:
+inactive cells, pinch-outs and edge crossings beside a fault are
+handled, and every cell closes (Norne: 0 open cells).
+
 ### Added
 - **`zcorn_ops`: ZCORN-only edits.** `zcorn_cube` / `with_zcorn` address
   ZCORN as `(2NX, 2NY, 2NZ)` corner slots; `apply_zcorn_displacement`
