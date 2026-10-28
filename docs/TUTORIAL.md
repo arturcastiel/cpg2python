@@ -1,7 +1,7 @@
 # cpg2unstructured — Tutorial
 
 **Main author:** Dr. Artur Castiel Reis de Souza
-**Applies to:** cpg2unstructured **v0.3.0**
+**Applies to:** cpg2unstructured **v0.4.0**
 
 A formal, worked walkthrough of the library: how to turn an Eclipse
 corner-point geometry (CPG) `.grdecl` deck into an unstructured mesh +

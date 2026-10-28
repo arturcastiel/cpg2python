@@ -132,7 +132,8 @@ which uses this library together with
 29 lessons, from reading a deck to sliding faults in Z by editing ZCORN
 and re-processing the grid (lessons 19–29, with figures). Re-processing a
 slid deck relies on `build_topology` pairing cells across a fault by depth
-overlap (0.3.0).
+overlap (0.3.0), and on faces in general position — inactive or pinched
+cells and crossing edges beside a fault (0.4.0).
 
 ## API
 
