@@ -174,6 +174,25 @@ class TestStageTwo:
         assert not np.allclose(r.d_top, r.d_bot), "top and bottom must differ"
         assert r.d_top[ij][0] > 0 and r.d_bot[ij][0] < 0
 
+    def test_a_pillar_already_on_its_top_target_still_tilts(self, grid, lat):
+        """A dipping plane whose top trace lies on a pillar line: only the base moves.
+
+        write_tol used to zero both ends wherever the TOP move was tiny, which threw
+        the base move away and returned the input grid with ``ok`` True.
+        """
+        ij = (1, 1)
+        t = PillarTargets(
+            ij=np.array([ij]),
+            xy_top=lat.top[ij][None, :],
+            xy_bot=(lat.bot[ij] + [0.3, 0.0])[None, :],
+        )
+        r = morph_pillars(grid, t, boundary="free", write_tol=1e-3)
+        assert r.ok
+        assert np.abs(r.d_top).max() < 1e-12
+        assert r.d_bot[ij][0] > 0.29
+        nonzero = np.linalg.norm(r.d_bot, axis=-1) > 0
+        assert np.all(np.linalg.norm(r.d_bot[nonzero], axis=-1) >= 1e-3)
+
     def test_stage_two_result_is_valid(self, grid, lat):
         ij = (1, 1)
         t = PillarTargets(

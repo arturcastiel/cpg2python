@@ -6,6 +6,12 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+- `morph_pillars` threw away a pillar's base move whenever its top move was
+  below `write_tol`, so a stage-2 morph whose top targets were already met (a
+  dipping plane whose top trace lies on a pillar line) returned the input grid
+  with `ok` True. `write_tol` now zeroes each end on its own.
+
 ## [0.4.0] — 2026-10-28
 
 ZCORN-only edits for sliding faults, and fault faces in general position:

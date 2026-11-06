@@ -850,9 +850,10 @@ def morph_pillars(
     def attempt(w: float) -> tuple[MorphResult, PillarLattice]:
         d_top, d_bot = _solve_once(original, targets, h, w, bmask, boundary, free_mask, normal_only,
                                    smoothness, poisson, stiffness)
-        small = np.linalg.norm(d_top, axis=-1) < write_tol
-        d_top = np.where(small[..., None], 0.0, d_top)
-        d_bot = np.where(small[..., None], 0.0, d_bot)
+        # zero each end on its own: a pillar already on its top target can still need
+        # its base moved (a dipping plane whose top trace lies on a pillar line)
+        d_top = np.where((np.linalg.norm(d_top, axis=-1) < write_tol)[..., None], 0.0, d_top)
+        d_bot = np.where((np.linalg.norm(d_bot, axis=-1) < write_tol)[..., None], 0.0, d_bot)
         moved = apply_displacement(grid, d_top, d_bot)
         lat = pillar_lattice(moved)
         rep = check_validity(lat, original, min_fraction=min_fraction,
